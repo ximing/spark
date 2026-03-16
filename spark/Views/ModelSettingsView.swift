@@ -294,9 +294,8 @@ struct ModelSettingsView: View {
     }
 
     private func restartKeyboardShortcutService() {
-        // Stop and restart the keyboard shortcut service to pick up new configuration
-        appState.environment.keyboardShortcutService.stopListening()
-        appState.environment.keyboardShortcutService.startListening()
+        // Restart the keyboard shortcut service through AppState
+        appState.restartKeyboardShortcutService()
     }
 }
 

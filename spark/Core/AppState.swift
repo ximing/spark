@@ -129,8 +129,8 @@ class AppState: ObservableObject {
                 if hadNoActiveConfig,
                    newActiveConfig != nil,
                    self.permissionState.isAuthorized {
-                    // Auto-start keyboard shortcut listener when model is configured
-                    self.startShortcutListener()
+                    // Notify that monitoring should start - the actual start is handled by startMonitoring()
+                    // which is the single entry point for starting the keyboard shortcut listener
                 }
             }
             .store(in: &cancellables)
@@ -138,6 +138,8 @@ class AppState: ObservableObject {
 
     /// Starts the keyboard shortcut listener (always on when permission and model are ready)
     private func startShortcutListener() {
+        // Update monitoring state
+        isMonitoring = true
         // Start listening for keyboard shortcuts
         environment.keyboardShortcutService.startListening()
         print("⌨️ Keyboard shortcut listener started")
@@ -333,6 +335,22 @@ class AppState: ObservableObject {
 
         // Stop listening for keyboard shortcuts
         environment.keyboardShortcutService.stopListening()
+    }
+
+    /// Restarts the keyboard shortcut service after configuration changes
+    func restartKeyboardShortcutService() {
+        // Stop the existing listener
+        environment.keyboardShortcutService.stopListening()
+
+        // Only restart if we have permission and an active model config
+        if permissionState.isAuthorized, activeModelConfig != nil {
+            isMonitoring = true
+            environment.keyboardShortcutService.startListening()
+            print("⌨️ Keyboard shortcut service restarted")
+        } else {
+            isMonitoring = false
+            print("⚠️ Keyboard shortcut service not restarted: permission or model missing")
+        }
     }
 
     // MARK: - Model Configuration Management
