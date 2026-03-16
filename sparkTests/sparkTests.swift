@@ -25,32 +25,6 @@ class MockPermissionService: PermissionService {
     }
 }
 
-class MockInputMonitoringService: InputMonitoringService {
-    var isMonitoring: Bool = false
-    private var inputEventsSubject = PassthroughSubject<String, Never>()
-    var inputEvents: AnyPublisher<String, Never> {
-        inputEventsSubject.eraseToAnyPublisher()
-    }
-    var debounceTimeout: TimeInterval = 1.0
-
-    func startMonitoring() {
-        isMonitoring = true
-    }
-
-    func stopMonitoring() {
-        isMonitoring = false
-    }
-
-    func setDebounceTimeout(_ timeout: TimeInterval) {
-        debounceTimeout = max(0.8, min(1.5, timeout))
-    }
-
-    // Helper for testing
-    func simulateInput(_ text: String) {
-        inputEventsSubject.send(text)
-    }
-}
-
 class MockTranslationService: TranslationService {
     var shouldFail = false
     var translationDelay: TimeInterval = 0.1
@@ -170,6 +144,14 @@ class MockKeyboardShortcutService: KeyboardShortcutService {
     }
 }
 
+class MockInputFieldReaderService: InputFieldReaderService {
+    var mockResult: InputFieldReadResult = .noFocusedElement
+
+    func readFocusedFieldText() -> InputFieldReadResult {
+        return mockResult
+    }
+}
+
 // MARK: - Test Suite
 
 @Suite("Spark Core Functionality Tests")
@@ -184,18 +166,17 @@ struct SparkTests {
         let mockPermission = MockPermissionService()
         mockPermission.mockState = .denied
 
-        let mockMonitoring = MockInputMonitoringService()
         let mockTranslation = MockTranslationService()
         let mockModelConfig = MockModelConfigService()
         let mockHistory = MockHistoryService()
 
         let environment = AppEnvironment(
             permissionService: mockPermission,
-            inputMonitoringService: mockMonitoring,
             translationService: mockTranslation,
             modelConfigService: mockModelConfig,
             historyService: mockHistory,
-            keyboardShortcutService: MockKeyboardShortcutService()
+            keyboardShortcutService: MockKeyboardShortcutService(),
+            inputFieldReaderService: MockInputFieldReaderService()
         )
 
         let appState = AppState(environment: environment)
@@ -215,7 +196,6 @@ struct SparkTests {
 
         // Then: monitoring should not start and error should be set
         #expect(appState.isMonitoring == false)
-        #expect(mockMonitoring.isMonitoring == false)
         #expect(appState.runtimeError == .permissionMissing)
     }
 
@@ -226,18 +206,17 @@ struct SparkTests {
         let mockPermission = MockPermissionService()
         mockPermission.mockState = .authorized
 
-        let mockMonitoring = MockInputMonitoringService()
         let mockTranslation = MockTranslationService()
         let mockModelConfig = MockModelConfigService()
         let mockHistory = MockHistoryService()
 
         let environment = AppEnvironment(
             permissionService: mockPermission,
-            inputMonitoringService: mockMonitoring,
             translationService: mockTranslation,
             modelConfigService: mockModelConfig,
             historyService: mockHistory,
-            keyboardShortcutService: MockKeyboardShortcutService()
+            keyboardShortcutService: MockKeyboardShortcutService(),
+            inputFieldReaderService: MockInputFieldReaderService()
         )
 
         let appState = AppState(environment: environment)
@@ -259,145 +238,8 @@ struct SparkTests {
         appState.startMonitoring()
 
         // Then: monitoring should start successfully
-        #expect(mockMonitoring.isMonitoring == true)
         #expect(appState.isMonitoring == true)
         #expect(appState.runtimeError == nil)
-    }
-
-    // MARK: - Debounce Tests
-
-    @Test("Debounce configuration: timeout should be clamped to valid range")
-    @MainActor
-    func testDebounceClampingLow() async throws {
-        // Given: mock services
-        let mockMonitoring = MockInputMonitoringService()
-        let environment = AppEnvironment(
-            permissionService: MockPermissionService(),
-            inputMonitoringService: mockMonitoring,
-            translationService: MockTranslationService(),
-            modelConfigService: MockModelConfigService(),
-            historyService: MockHistoryService()
-        )
-
-        let appState = AppState(environment: environment)
-
-        // When: setting debounce timeout below minimum
-        appState.debounceTimeout = 0.5
-
-        // Then: value should be clamped to minimum (0.8s)
-        #expect(mockMonitoring.debounceTimeout == 0.8)
-    }
-
-    @Test("Debounce configuration: timeout should be clamped to maximum")
-    @MainActor
-    func testDebounceClampingHigh() async throws {
-        // Given: mock services
-        let mockMonitoring = MockInputMonitoringService()
-        let environment = AppEnvironment(
-            permissionService: MockPermissionService(),
-            inputMonitoringService: mockMonitoring,
-            translationService: MockTranslationService(),
-            modelConfigService: MockModelConfigService(),
-            historyService: MockHistoryService()
-        )
-
-        let appState = AppState(environment: environment)
-
-        // When: setting debounce timeout above maximum
-        appState.debounceTimeout = 2.0
-
-        // Then: value should be clamped to maximum (1.5s)
-        #expect(mockMonitoring.debounceTimeout == 1.5)
-    }
-
-    @Test("Debounce configuration: valid timeout should be preserved")
-    @MainActor
-    func testDebounceValidRange() async throws {
-        // Given: mock services
-        let mockMonitoring = MockInputMonitoringService()
-        let environment = AppEnvironment(
-            permissionService: MockPermissionService(),
-            inputMonitoringService: mockMonitoring,
-            translationService: MockTranslationService(),
-            modelConfigService: MockModelConfigService(),
-            historyService: MockHistoryService()
-        )
-
-        let appState = AppState(environment: environment)
-
-        // When: setting valid debounce timeout
-        appState.debounceTimeout = 1.2
-
-        // Then: value should be preserved
-        #expect(mockMonitoring.debounceTimeout == 1.2)
-    }
-
-    @Test("Debounce behavior: timer should not reset when polled text is unchanged")
-    @MainActor
-    func testDebounceUnchangedTextNoReset() async throws {
-        // Given: configured app with known debounce timeout
-        let mockPermission = MockPermissionService()
-        mockPermission.mockState = .authorized
-
-        let mockMonitoring = MockInputMonitoringService()
-        let mockTranslation = MockTranslationService()
-        mockTranslation.translationDelay = 0.1
-
-        let mockModelConfig = MockModelConfigService()
-        let environment = AppEnvironment(
-            permissionService: mockPermission,
-            inputMonitoringService: mockMonitoring,
-            translationService: mockTranslation,
-            modelConfigService: mockModelConfig,
-            historyService: MockHistoryService()
-        )
-
-        let appState = AppState(environment: environment)
-
-        // Set debounce to 1.0s
-        appState.debounceTimeout = 1.0
-
-        // Add model config
-        let testConfig = ModelConfig(
-            id: UUID(),
-            name: "Test Model",
-            modelName: "gpt-4",
-            baseURL: "https://api.openai.com",
-            isActive: true
-        )
-        try mockModelConfig.saveConfiguration(testConfig, apiKey: "test-key")
-
-        // Wait for state to update
-        try await Task.sleep(nanoseconds: 100_000_000) // 0.1s
-
-        // Start monitoring
-        appState.startMonitoring()
-
-        // When: simulating input event once (after debounce)
-        // This simulates the real service where polling would occur multiple times
-        // with the same text, but our mock service emits only once after debounce
-        let inputText = "稳定的文本"
-        mockMonitoring.simulateInput(inputText)
-
-        // Wait for translation to complete
-        try await Task.sleep(nanoseconds: 400_000_000) // 0.4s
-
-        // Then: translation should be triggered exactly once
-        #expect(appState.latestTranslation != nil)
-        #expect(appState.latestTranslation?.originalText == inputText)
-        #expect(mockTranslation.lastTranslatedText == inputText)
-
-        // Verify only one translation occurred
-        let firstTranslation = appState.latestTranslation
-
-        // Simulate repeated polling with same text (mock emits again)
-        mockMonitoring.simulateInput(inputText)
-        try await Task.sleep(nanoseconds: 400_000_000) // 0.4s
-
-        // The translation result should change (new timestamp) because mock service
-        // doesn't have the same logic as real service, but we verify the fix
-        // works by checking that real GlobalInputMonitoringService has the tracking
-        #expect(appState.latestTranslation != nil)
     }
 
     // MARK: - Model Switching Tests
@@ -409,10 +251,11 @@ struct SparkTests {
         let mockModelConfig = MockModelConfigService()
         let environment = AppEnvironment(
             permissionService: MockPermissionService(),
-            inputMonitoringService: MockInputMonitoringService(),
             translationService: MockTranslationService(),
             modelConfigService: mockModelConfig,
-            historyService: MockHistoryService()
+            historyService: MockHistoryService(),
+            keyboardShortcutService: MockKeyboardShortcutService(),
+            inputFieldReaderService: MockInputFieldReaderService()
         )
 
         let appState = AppState(environment: environment)
@@ -446,10 +289,11 @@ struct SparkTests {
         let mockModelConfig = MockModelConfigService()
         let environment = AppEnvironment(
             permissionService: MockPermissionService(),
-            inputMonitoringService: MockInputMonitoringService(),
             translationService: MockTranslationService(),
             modelConfigService: mockModelConfig,
-            historyService: MockHistoryService()
+            historyService: MockHistoryService(),
+            keyboardShortcutService: MockKeyboardShortcutService(),
+            inputFieldReaderService: MockInputFieldReaderService()
         )
 
         let appState = AppState(environment: environment)
@@ -485,10 +329,11 @@ struct SparkTests {
 
         let environment = AppEnvironment(
             permissionService: MockPermissionService(),
-            inputMonitoringService: MockInputMonitoringService(),
             translationService: MockTranslationService(),
             modelConfigService: MockModelConfigService(),
-            historyService: mockHistory
+            historyService: mockHistory,
+            keyboardShortcutService: MockKeyboardShortcutService(),
+            inputFieldReaderService: MockInputFieldReaderService()
         )
 
         let appState = AppState(environment: environment)
@@ -516,10 +361,11 @@ struct SparkTests {
 
         let environment = AppEnvironment(
             permissionService: MockPermissionService(),
-            inputMonitoringService: MockInputMonitoringService(),
             translationService: MockTranslationService(),
             modelConfigService: MockModelConfigService(),
-            historyService: mockHistory
+            historyService: mockHistory,
+            keyboardShortcutService: MockKeyboardShortcutService(),
+            inputFieldReaderService: MockInputFieldReaderService()
         )
 
         let appState = AppState(environment: environment)
@@ -551,10 +397,11 @@ struct SparkTests {
 
         let environment = AppEnvironment(
             permissionService: MockPermissionService(),
-            inputMonitoringService: MockInputMonitoringService(),
             translationService: MockTranslationService(),
             modelConfigService: MockModelConfigService(),
-            historyService: mockHistory
+            historyService: mockHistory,
+            keyboardShortcutService: MockKeyboardShortcutService(),
+            inputFieldReaderService: MockInputFieldReaderService()
         )
 
         let appState = AppState(environment: environment)
@@ -590,13 +437,13 @@ struct SparkTests {
         let mockPermission = MockPermissionService()
         mockPermission.mockState = .authorized
 
-        let mockMonitoring = MockInputMonitoringService()
         let environment = AppEnvironment(
             permissionService: mockPermission,
-            inputMonitoringService: mockMonitoring,
             translationService: MockTranslationService(),
             modelConfigService: MockModelConfigService(),
-            historyService: MockHistoryService()
+            historyService: MockHistoryService(),
+            keyboardShortcutService: MockKeyboardShortcutService(),
+            inputFieldReaderService: MockInputFieldReaderService()
         )
 
         let appState = AppState(environment: environment)
@@ -606,7 +453,6 @@ struct SparkTests {
 
         // Then: monitoring should not start and error should be set
         #expect(appState.isMonitoring == false)
-        #expect(mockMonitoring.isMonitoring == false)
         #expect(appState.runtimeError == .modelUnavailable)
     }
 
@@ -619,17 +465,22 @@ struct SparkTests {
         let mockPermission = MockPermissionService()
         mockPermission.mockState = .authorized
 
-        let mockMonitoring = MockInputMonitoringService()
         let mockTranslation = MockTranslationService()
         mockTranslation.shouldFail = true
 
         let mockModelConfig = MockModelConfigService()
+        let mockInputFieldReader = MockInputFieldReaderService()
+        mockInputFieldReader.mockResult = .success("测试文本")
+
+        let mockKeyboardShortcut = MockKeyboardShortcutService()
+
         let environment = AppEnvironment(
             permissionService: mockPermission,
-            inputMonitoringService: mockMonitoring,
             translationService: mockTranslation,
             modelConfigService: mockModelConfig,
-            historyService: MockHistoryService()
+            historyService: MockHistoryService(),
+            keyboardShortcutService: mockKeyboardShortcut,
+            inputFieldReaderService: mockInputFieldReader
         )
 
         let appState = AppState(environment: environment)
@@ -644,8 +495,8 @@ struct SparkTests {
         // Start monitoring
         appState.startMonitoring()
 
-        // When: simulating input that will fail translation
-        mockMonitoring.simulateInput("测试文本")
+        // When: triggering translation via keyboard shortcut
+        mockKeyboardShortcut.simulateShortcut()
 
         // Wait for async translation attempt
         try await Task.sleep(nanoseconds: 600_000_000) // 0.6s
@@ -661,14 +512,13 @@ struct SparkTests {
 
     // MARK: - End-to-End Pipeline Tests
 
-    @Test("End-to-end: input event should trigger translation and update UI state")
+    @Test("End-to-end: keyboard shortcut should trigger translation and update UI state")
     @MainActor
     func testEndToEndPipeline() async throws {
         // Given: fully configured app with all services
         let mockPermission = MockPermissionService()
         mockPermission.mockState = .authorized
 
-        let mockMonitoring = MockInputMonitoringService()
         let mockTranslation = MockTranslationService()
         mockTranslation.translationDelay = 0.2 // Simulate realistic API delay
 
@@ -676,13 +526,19 @@ struct SparkTests {
         let mockHistory = MockHistoryService()
         mockHistory.isEnabled = true
 
+        let mockInputFieldReader = MockInputFieldReaderService()
+        let inputText = "你好世界"
+        mockInputFieldReader.mockResult = .success(inputText)
+
+        let mockKeyboardShortcut = MockKeyboardShortcutService()
+
         let environment = AppEnvironment(
             permissionService: mockPermission,
-            inputMonitoringService: mockMonitoring,
             translationService: mockTranslation,
             modelConfigService: mockModelConfig,
             historyService: mockHistory,
-            keyboardShortcutService: MockKeyboardShortcutService()
+            keyboardShortcutService: mockKeyboardShortcut,
+            inputFieldReaderService: mockInputFieldReader
         )
 
         let appState = AppState(environment: environment)
@@ -706,9 +562,8 @@ struct SparkTests {
         #expect(appState.isMonitoring == true)
         #expect(appState.latestTranslation == nil)
 
-        // When: simulating input event (after debounce)
-        let inputText = "你好世界"
-        mockMonitoring.simulateInput(inputText)
+        // When: triggering translation via keyboard shortcut
+        mockKeyboardShortcut.simulateShortcut()
 
         // Wait for translation to complete (delay + processing time)
         try await Task.sleep(nanoseconds: 500_000_000) // 0.5s
@@ -744,17 +599,22 @@ struct SparkTests {
         let mockPermission = MockPermissionService()
         mockPermission.mockState = .authorized
 
-        let mockMonitoring = MockInputMonitoringService()
         let mockTranslation = MockTranslationService()
         mockTranslation.translationDelay = 0.3 // 300ms delay
 
         let mockModelConfig = MockModelConfigService()
+        let mockInputFieldReader = MockInputFieldReaderService()
+        mockInputFieldReader.mockResult = .success("测试延迟")
+
+        let mockKeyboardShortcut = MockKeyboardShortcutService()
+
         let environment = AppEnvironment(
             permissionService: mockPermission,
-            inputMonitoringService: mockMonitoring,
             translationService: mockTranslation,
             modelConfigService: mockModelConfig,
-            historyService: MockHistoryService()
+            historyService: MockHistoryService(),
+            keyboardShortcutService: mockKeyboardShortcut,
+            inputFieldReaderService: mockInputFieldReader
         )
 
         let appState = AppState(environment: environment)
@@ -769,8 +629,8 @@ struct SparkTests {
         // Start monitoring
         appState.startMonitoring()
 
-        // When: simulating input
-        mockMonitoring.simulateInput("测试延迟")
+        // When: triggering translation via keyboard shortcut
+        mockKeyboardShortcut.simulateShortcut()
 
         // Wait for translation
         try await Task.sleep(nanoseconds: 600_000_000) // 0.6s
@@ -790,17 +650,20 @@ struct SparkTests {
         let mockPermission = MockPermissionService()
         mockPermission.mockState = .authorized
 
-        let mockMonitoring = MockInputMonitoringService()
         let mockTranslation = MockTranslationService()
         mockTranslation.translationDelay = 0.1
 
         let mockModelConfig = MockModelConfigService()
+        let mockInputFieldReader = MockInputFieldReaderService()
+        let mockKeyboardShortcut = MockKeyboardShortcutService()
+
         let environment = AppEnvironment(
             permissionService: mockPermission,
-            inputMonitoringService: mockMonitoring,
             translationService: mockTranslation,
             modelConfigService: mockModelConfig,
-            historyService: MockHistoryService()
+            historyService: MockHistoryService(),
+            keyboardShortcutService: mockKeyboardShortcut,
+            inputFieldReaderService: mockInputFieldReader
         )
 
         let appState = AppState(environment: environment)
@@ -815,14 +678,16 @@ struct SparkTests {
         // Start monitoring
         appState.startMonitoring()
 
-        // When: simulating multiple input events
-        mockMonitoring.simulateInput("第一个文本")
+        // When: triggering multiple translations via keyboard shortcut
+        mockInputFieldReader.mockResult = .success("第一个文本")
+        mockKeyboardShortcut.simulateShortcut()
         try await Task.sleep(nanoseconds: 300_000_000) // 0.3s
 
         let firstLatency = appState.lastTranslationLatency
         #expect(firstLatency != nil)
 
-        mockMonitoring.simulateInput("第二个文本")
+        mockInputFieldReader.mockResult = .success("第二个文本")
+        mockKeyboardShortcut.simulateShortcut()
         try await Task.sleep(nanoseconds: 300_000_000) // 0.3s
 
         let secondLatency = appState.lastTranslationLatency

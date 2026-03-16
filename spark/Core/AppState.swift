@@ -54,14 +54,6 @@ class AppState: ObservableObject {
     @Published var historyItems: [HistoryItem] = []
     @Published var isHistoryEnabled: Bool = false
     @Published var runtimeError: RuntimeError?
-    @Published var debounceTimeout: TimeInterval = 1.0 {
-        didSet {
-            // Update the monitoring service when debounce timeout changes
-            environment.inputMonitoringService.setDebounceTimeout(debounceTimeout)
-            // Persist the value
-            UserDefaults.standard.set(debounceTimeout, forKey: "debounceTimeout")
-        }
-    }
     @Published var isTranslating: Bool = false
     @Published var showShortcutFeedback: Bool = false
 
@@ -81,12 +73,6 @@ class AppState: ObservableObject {
     init(environment: AppEnvironment) {
         self.environment = environment
 
-        // Load persisted debounce timeout (clamped to 800-1500ms range)
-        let persistedTimeout = UserDefaults.standard.double(forKey: "debounceTimeout")
-        if persistedTimeout > 0 {
-            self.debounceTimeout = min(max(persistedTimeout, 0.8), 1.5)
-        }
-
         setupBindings()
         // Check initial permission state
         checkPermissions()
@@ -105,14 +91,6 @@ class AppState: ObservableObject {
 
         // Initialize history enabled state from service
         isHistoryEnabled = environment.historyService.isEnabled
-
-        // Subscribe to input events from monitoring service
-        environment.inputMonitoringService.inputEvents
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] text in
-                self?.handleInputEvent(text)
-            }
-            .store(in: &cancellables)
 
         // Subscribe to keyboard shortcut events
         environment.keyboardShortcutService.shortcutTriggered
@@ -389,8 +367,7 @@ class AppState: ObservableObject {
         // Clear any previous errors
         runtimeError = nil
 
-        environment.inputMonitoringService.startMonitoring()
-        isMonitoring = environment.inputMonitoringService.isMonitoring
+        isMonitoring = true
 
         // Start listening for keyboard shortcuts
         environment.keyboardShortcutService.startListening()
@@ -398,8 +375,7 @@ class AppState: ObservableObject {
 
     /// Stops input monitoring
     func stopMonitoring() {
-        environment.inputMonitoringService.stopMonitoring()
-        isMonitoring = environment.inputMonitoringService.isMonitoring
+        isMonitoring = false
 
         // Stop listening for keyboard shortcuts
         environment.keyboardShortcutService.stopListening()

@@ -10,7 +10,6 @@ import Foundation
 /// Lightweight dependency injection container for runtime service wiring
 class AppEnvironment {
     let permissionService: PermissionService
-    let inputMonitoringService: InputMonitoringService
     let translationService: TranslationService
     let modelConfigService: ModelConfigService
     let historyService: HistoryService
@@ -19,7 +18,6 @@ class AppEnvironment {
 
     init(
         permissionService: PermissionService,
-        inputMonitoringService: InputMonitoringService,
         translationService: TranslationService,
         modelConfigService: ModelConfigService,
         historyService: HistoryService,
@@ -27,7 +25,6 @@ class AppEnvironment {
         inputFieldReaderService: InputFieldReaderService
     ) {
         self.permissionService = permissionService
-        self.inputMonitoringService = inputMonitoringService
         self.translationService = translationService
         self.modelConfigService = modelConfigService
         self.historyService = historyService
@@ -39,10 +36,6 @@ class AppEnvironment {
     static func production() -> AppEnvironment {
         // Real permission service implementation
         let permissionService = AccessibilityPermissionService()
-
-        // TODO: Replace with real implementation once keyboard shortcut trigger is wired up
-        // Using mock for now since GlobalInputMonitoringService was removed
-        let inputMonitoringService = MockInputMonitoringService()
 
         // Real translation service implementation
         let translationService = AITranslationService()
@@ -61,7 +54,6 @@ class AppEnvironment {
 
         return AppEnvironment(
             permissionService: permissionService,
-            inputMonitoringService: inputMonitoringService,
             translationService: translationService,
             modelConfigService: modelConfigService,
             historyService: historyService,
@@ -81,18 +73,6 @@ private class MockPermissionService: PermissionService {
     }
 
     func openAccessibilitySettings() {}
-}
-
-class MockInputMonitoringService: InputMonitoringService {
-    var inputEvents: AnyPublisher<String, Never> {
-        Empty().eraseToAnyPublisher()
-    }
-
-    var isMonitoring: Bool { false }
-
-    func startMonitoring() {}
-    func stopMonitoring() {}
-    func setDebounceTimeout(_ timeout: TimeInterval) {}
 }
 
 private class MockModelConfigService: ModelConfigService {
