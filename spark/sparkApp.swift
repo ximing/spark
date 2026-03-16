@@ -16,11 +16,14 @@ extension Notification.Name {
 struct sparkApp: App {
     @StateObject private var appState: AppState
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    @State private var showOnboarding = true
+    @State private var showOnboarding: Bool
 
     init() {
         let environment = AppEnvironment.production()
-        _appState = StateObject(wrappedValue: AppState(environment: environment))
+        let state = AppState(environment: environment)
+        _appState = StateObject(wrappedValue: state)
+        // Skip onboarding if permission is already granted on launch
+        _showOnboarding = State(initialValue: !state.permissionState.isAuthorized)
     }
 
     var body: some Scene {
@@ -29,7 +32,7 @@ struct sparkApp: App {
                 if showOnboarding {
                     PermissionOnboardingView(
                         onContinue: {
-                            appDelegate.prepare(appState: appState)
+                            showOnboarding = false
                         }
                     )
                     .environmentObject(appState)
