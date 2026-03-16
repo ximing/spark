@@ -124,8 +124,13 @@ class MockHistoryService: HistoryService {
 
 class MockKeyboardShortcutService: KeyboardShortcutService {
     private let shortcutSubject = PassthroughSubject<Void, Never>()
+    private let settingsShortcutSubject = PassthroughSubject<Void, Never>()
     var shortcutTriggered: AnyPublisher<Void, Never> {
         shortcutSubject.eraseToAnyPublisher()
+    }
+
+    var settingsShortcutTriggered: AnyPublisher<Void, Never> {
+        settingsShortcutSubject.eraseToAnyPublisher()
     }
 
     private(set) var isListening: Bool = false

@@ -19,11 +19,10 @@ class PersistentHistoryService: HistoryService {
     }
 
     var isEnabled: Bool {
-        // Default to true if not set - use optional to distinguish between unset and false
         if UserDefaults.standard.object(forKey: isEnabledKey) == nil {
-            // First launch - enable history by default
-            UserDefaults.standard.set(true, forKey: isEnabledKey)
-            return true
+            // First launch - disable history by default per PRD FR-011
+            UserDefaults.standard.set(false, forKey: isEnabledKey)
+            return false
         }
         return UserDefaults.standard.bool(forKey: isEnabledKey)
     }
