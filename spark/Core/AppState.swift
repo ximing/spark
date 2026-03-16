@@ -7,6 +7,7 @@
 
 import Foundation
 import Combine
+import AppKit
 
 /// Runtime error types that can occur during app operation
 enum RuntimeError: Equatable {
@@ -62,6 +63,9 @@ class AppState: ObservableObject {
         }
     }
     @Published var isTranslating: Bool = false
+
+    // Clipboard fallback state
+    @Published var pendingClipboardText: String?
 
     // Latency tracking
     @Published var lastTranslationLatency: TimeInterval?
@@ -271,6 +275,7 @@ class AppState: ObservableObject {
             // Check if the text is not empty
             guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                 print("⚠️ Shortcut translation skipped: focused field is empty")
+                tryClipboardFallback()
                 return
             }
 
@@ -280,11 +285,11 @@ class AppState: ObservableObject {
 
         case .noFocusedElement:
             print("⚠️ Shortcut translation skipped: no focused element")
-            // Don't show error to user, just log it
+            tryClipboardFallback()
 
         case .noTextValue:
             print("⚠️ Shortcut translation skipped: focused element has no text value")
-            // Don't show error to user, just log it
+            tryClipboardFallback()
 
         case .passwordField:
             print("🔒 Shortcut translation skipped: password field detected (security)")
@@ -295,6 +300,40 @@ class AppState: ObservableObject {
             // Show error to user for actual failures
             runtimeError = .translationFailed("Could not read focused field: \(message)")
         }
+    }
+
+    /// Attempts to use clipboard content as a fallback when focused field reading fails
+    private func tryClipboardFallback() {
+        // Try to read from clipboard
+        guard let clipboardText = NSPasteboard.general.string(forType: .string) else {
+            print("⚠️ Clipboard fallback skipped: no text in clipboard")
+            return
+        }
+
+        // Check if clipboard text is not empty
+        let trimmedText = clipboardText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedText.isEmpty else {
+            print("⚠️ Clipboard fallback skipped: clipboard text is empty")
+            return
+        }
+
+        print("📋 Clipboard text available: \(trimmedText.prefix(50))...")
+        // Store the clipboard text and trigger confirmation dialog
+        pendingClipboardText = trimmedText
+    }
+
+    /// Confirms and uses the clipboard text for translation
+    func useClipboardText() {
+        guard let text = pendingClipboardText else { return }
+        print("✅ User confirmed clipboard usage")
+        pendingClipboardText = nil
+        handleInputEvent(text)
+    }
+
+    /// Cancels the clipboard fallback
+    func cancelClipboardFallback() {
+        print("❌ User cancelled clipboard usage")
+        pendingClipboardText = nil
     }
 
     /// Checks and updates permission state

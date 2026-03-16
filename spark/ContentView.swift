@@ -115,6 +115,16 @@ struct ContentView: View {
         .sheet(isPresented: $showingSettings) {
             ModelSettingsView()
         }
+        .alert("Use Clipboard for Translation?", isPresented: .constant(appState.pendingClipboardText != nil)) {
+            Button("Use Clipboard") {
+                appState.useClipboardText()
+            }
+            Button("Cancel", role: .cancel) {
+                appState.cancelClipboardFallback()
+            }
+        } message: {
+            Text("Cannot read focused input field. Would you like to translate the text from your clipboard instead?")
+        }
     }
 }
 
