@@ -96,11 +96,26 @@ class AppState: ObservableObject {
             }
             .store(in: &cancellables)
 
-        // Track active model configuration changes
+        // Track active model configuration changes and auto-start monitoring
         environment.modelConfigService.configurations
             .receive(on: DispatchQueue.main)
             .sink { [weak self] configs in
-                self?.activeModelConfig = configs.first(where: { $0.isActive })
+                guard let self = self else { return }
+                let newActiveConfig = configs.first(where: { $0.isActive })
+                let hadNoActiveConfig = self.activeModelConfig == nil
+                self.activeModelConfig = newActiveConfig
+
+                // Auto-start monitoring if permission is granted, we just got an active model,
+                // and monitoring is not already running (Refs #3)
+                if hadNoActiveConfig,
+                   newActiveConfig != nil,
+                   self.permissionState.isAuthorized,
+                   !self.isMonitoring {
+                    // Small delay to ensure model config is fully loaded
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        self.startMonitoring()
+                    }
+                }
             }
             .store(in: &cancellables)
     }

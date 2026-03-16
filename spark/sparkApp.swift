@@ -31,9 +31,14 @@ struct sparkApp: App {
                     }
                 }
                 .onChange(of: appState.permissionState) { oldValue, newValue in
-                    // Show floating window when permission is granted
+                    // Show floating window and auto-start monitoring when permission is granted
                     if !oldValue.isAuthorized && newValue.isAuthorized {
                         floatingWindowManager.showFloatingWindow()
+
+                        // Auto-start monitoring within 3 seconds (US-001 acceptance criteria)
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                            appState.startMonitoring()
+                        }
                     }
                 }
         }
