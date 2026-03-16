@@ -61,6 +61,7 @@ class AppState: ObservableObject {
             UserDefaults.standard.set(debounceTimeout, forKey: "debounceTimeout")
         }
     }
+    @Published var isTranslating: Bool = false
 
     // Latency tracking
     @Published var lastTranslationLatency: TimeInterval?
@@ -68,6 +69,9 @@ class AppState: ObservableObject {
 
     let environment: AppEnvironment
     private var cancellables = Set<AnyCancellable>()
+
+    // Task management for translation pipeline
+    private var currentTranslationTask: Task<Void, Never>?
 
     init(environment: AppEnvironment) {
         self.environment = environment
@@ -176,14 +180,26 @@ class AppState: ObservableObject {
         // Clear any previous errors before attempting translation
         runtimeError = nil
 
+        // Cancel any in-flight translation task to prevent race conditions
+        currentTranslationTask?.cancel()
+
+        // Set loading state before starting translation
+        isTranslating = true
+
         // Trigger translation asynchronously
-        Task {
+        currentTranslationTask = Task {
             do {
                 let translatedText = try await environment.translationService.translate(
                     text: text,
                     config: activeConfig,
                     apiKey: apiKey
                 )
+
+                // Check if task was cancelled before updating UI
+                guard !Task.isCancelled else {
+                    print("⚠️ Translation cancelled (newer translation in progress)")
+                    return
+                }
 
                 // Update state on main actor
                 await MainActor.run {
@@ -206,11 +222,21 @@ class AppState: ObservableObject {
                         environment.historyService.saveToHistory(translation)
                     }
 
+                    // Clear loading state
+                    self.isTranslating = false
+
                     print("✅ Translation completed: \(translatedText.prefix(50))...")
                 }
             } catch {
+                // Check if task was cancelled
+                guard !Task.isCancelled else {
+                    print("⚠️ Translation cancelled (newer translation in progress)")
+                    return
+                }
+
                 // Handle translation failures without crashing
                 await MainActor.run {
+                    self.isTranslating = false
                     self.runtimeError = .translationFailed(error.localizedDescription)
                     print("❌ Translation failed: \(error.localizedDescription)")
                 }

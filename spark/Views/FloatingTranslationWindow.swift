@@ -123,18 +123,41 @@ struct FloatingTranslationView: View {
                         Text(translation.timestamp, style: .relative)
                             .font(.caption2)
                             .foregroundColor(.secondary)
+
+                        // Loading indicator (shown when new translation is in progress)
+                        if appState.isTranslating {
+                            HStack(spacing: 8) {
+                                ProgressView()
+                                    .scaleEffect(0.7)
+                                    .frame(width: 16, height: 16)
+                                Text("Translating new input...")
+                                    .font(.caption)
+                                    .foregroundColor(.blue)
+                            }
+                            .padding(.top, 4)
+                        }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
             } else {
-                // Empty state
+                // Empty state or loading state
                 VStack(spacing: 8) {
-                    Image(systemName: "text.magnifyingglass")
-                        .font(.system(size: 32))
-                        .foregroundColor(.secondary.opacity(0.5))
-                    Text("Waiting for input...")
-                        .font(.body)
-                        .foregroundColor(.secondary)
+                    if appState.isTranslating {
+                        // Loading indicator for first translation
+                        ProgressView()
+                            .scaleEffect(1.2)
+                        Text("Translating...")
+                            .font(.body)
+                            .foregroundColor(.secondary)
+                    } else {
+                        // Waiting for input
+                        Image(systemName: "text.magnifyingglass")
+                            .font(.system(size: 32))
+                            .foregroundColor(.secondary.opacity(0.5))
+                        Text("Waiting for input...")
+                            .font(.body)
+                            .foregroundColor(.secondary)
+                    }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }

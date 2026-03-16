@@ -59,8 +59,8 @@
         "xcodebuild -scheme spark -configuration Debug build succeeds"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Enhanced async translation pipeline: Added isTranslating state property to track translation in progress. Implemented task cancellation mechanism to prevent race conditions when multiple translations are triggered rapidly - currentTranslationTask stores the active task and cancels it before starting a new one. Added Task.isCancelled checks in the translation pipeline to gracefully handle cancellation. Updated FloatingTranslationWindow to show loading indicator when isTranslating is true, preserving previous translation result while new translation loads. Previous translation remains visible during new translation as required. Build succeeds."
     },
     {
       "id": "US-005",
