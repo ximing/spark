@@ -38,6 +38,9 @@ class GlobalInputMonitoringService: InputMonitoringService {
     private var debounceTimer: Timer?
     private var pendingText: String?
 
+    // Track last observed text to prevent resetting debounce timer for unchanged text
+    private var lastObservedText: String?
+
     // Auto-recovery configuration
     private var healthCheckTimer: Timer?
     private let healthCheckInterval: TimeInterval = 2.0 // Check every 2 seconds
@@ -113,6 +116,7 @@ class GlobalInputMonitoringService: InputMonitoringService {
         lastActiveApp = nil
         lastHealthyCheck = nil
         recoveryAttempts = 0
+        lastObservedText = nil
 
         print("🛑 Input monitoring stopped")
     }
@@ -153,6 +157,9 @@ class GlobalInputMonitoringService: InputMonitoringService {
             lastFocusedElement = nil
             lastActiveApp = app
 
+            // Reset text tracking on app switch
+            lastObservedText = nil
+
             // Immediately check the new app's focused element
             checkFocusedElement()
         }
@@ -185,11 +192,23 @@ class GlobalInputMonitoringService: InputMonitoringService {
             return
         }
 
+        // Detect focused element change
+        let elementChanged = !areElementsEqual(lastFocusedElement, focusedElement)
+        if elementChanged {
+            lastFocusedElement = focusedElement
+            // Reset text tracking when focused element changes
+            lastObservedText = nil
+        }
+
         // Apply content filtering rules before debouncing
         if let text = getTextFromElement(focusedElement),
            shouldProcessInput(text, from: focusedElement) {
-            // Schedule debounced emission
-            scheduleDebounce(for: text)
+            // Only schedule debounce if text has changed from last observed value
+            if text != lastObservedText {
+                lastObservedText = text
+                scheduleDebounce(for: text)
+            }
+            // If text is unchanged, let existing debounce timer continue
         }
     }
 
@@ -221,8 +240,9 @@ class GlobalInputMonitoringService: InputMonitoringService {
         inputEventsSubject.send(text)
         print("⏱️ Debounced input emitted after \(debounceTimeout)s idle: \(text.prefix(50))...")
 
-        // Clear pending text
+        // Clear pending text and reset observed text tracking
         pendingText = nil
+        lastObservedText = nil
     }
 
     /// Cancels the current debounce timer and clears pending text
@@ -300,6 +320,14 @@ class GlobalInputMonitoringService: InputMonitoringService {
     }
 
     // MARK: - Private Methods - Accessibility API
+
+    /// Compares two AXUIElement instances for equality
+    private func areElementsEqual(_ element1: AXUIElement?, _ element2: AXUIElement?) -> Bool {
+        guard let e1 = element1, let e2 = element2 else {
+            return element1 == nil && element2 == nil
+        }
+        return CFEqual(e1, e2)
+    }
 
     private func getSystemFocusedElement() -> AXUIElement? {
         // Get the frontmost application
@@ -418,6 +446,7 @@ class GlobalInputMonitoringService: InputMonitoringService {
         // Clear state
         lastFocusedElement = nil
         lastActiveApp = nil
+        lastObservedText = nil
 
         // Restart monitoring components
         observeAppSwitches()
