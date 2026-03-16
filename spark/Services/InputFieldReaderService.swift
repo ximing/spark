@@ -25,9 +25,9 @@ enum InputFieldReadResult {
     case error(String)
 }
 
-/// Protocol for reading text from the currently focused input field using Accessibility API
+/// Protocol for reading text from the currently focused input field
 protocol InputFieldReaderService {
     /// Reads the full text value from the currently focused input field
     /// - Returns: InputFieldReadResult indicating success with text or specific failure reason
-    func readFocusedFieldText() -> InputFieldReadResult
+    func readFocusedFieldText() async -> InputFieldReadResult
 }

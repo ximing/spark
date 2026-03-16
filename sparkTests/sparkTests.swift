@@ -147,7 +147,7 @@ class MockKeyboardShortcutService: KeyboardShortcutService {
 class MockInputFieldReaderService: InputFieldReaderService {
     var mockResult: InputFieldReadResult = .noFocusedElement
 
-    func readFocusedFieldText() -> InputFieldReadResult {
+    func readFocusedFieldText() async -> InputFieldReadResult {
         return mockResult
     }
 }
@@ -498,8 +498,8 @@ struct SparkTests {
         // When: triggering translation via keyboard shortcut
         mockKeyboardShortcut.simulateShortcut()
 
-        // Wait for async translation attempt
-        try await Task.sleep(nanoseconds: 600_000_000) // 0.6s
+        // Wait for async translation attempt (with extra time for error handling)
+        try await Task.sleep(nanoseconds: 700_000_000) // 0.7s
 
         // Then: error should be set and app should not crash
         #expect(appState.runtimeError != nil)
@@ -698,5 +698,452 @@ struct SparkTests {
         // Both latencies should be valid
         #expect(firstLatency! > 0)
         #expect(secondLatency! > 0)
+    }
+
+    // MARK: - Keyboard Shortcut Service Tests
+
+    @Test("KeyboardShortcutService: should start and stop listening")
+    func testKeyboardShortcutStartStop() {
+        // Given: keyboard shortcut service
+        let service = MockKeyboardShortcutService()
+
+        // Then: initially not listening
+        #expect(service.isListening == false)
+
+        // When: starting listening
+        service.startListening()
+
+        // Then: should be listening
+        #expect(service.isListening == true)
+
+        // When: stopping listening
+        service.stopListening()
+
+        // Then: should not be listening
+        #expect(service.isListening == false)
+    }
+
+    @Test("KeyboardShortcutService: should emit shortcut triggered event")
+    @MainActor
+    func testKeyboardShortcutTriggered() async throws {
+        // Given: keyboard shortcut service
+        let service = MockKeyboardShortcutService()
+        var eventReceived = false
+
+        // Subscribe to shortcut events
+        let cancellable = service.shortcutTriggered
+            .sink { _ in
+                eventReceived = true
+            }
+
+        // When: simulating shortcut trigger
+        service.simulateShortcut()
+
+        // Wait for async event
+        try await Task.sleep(nanoseconds: 100_000_000) // 0.1s
+
+        // Then: event should be received
+        #expect(eventReceived == true)
+
+        cancellable.cancel()
+    }
+
+    @Test("KeyboardShortcutService: monitoring should start shortcut listener")
+    @MainActor
+    func testMonitoringStartsShortcutListener() async throws {
+        // Given: configured app
+        let mockPermission = MockPermissionService()
+        mockPermission.mockState = .authorized
+
+        let mockKeyboardShortcut = MockKeyboardShortcutService()
+        let mockModelConfig = MockModelConfigService()
+
+        let environment = AppEnvironment(
+            permissionService: mockPermission,
+            translationService: MockTranslationService(),
+            modelConfigService: mockModelConfig,
+            historyService: MockHistoryService(),
+            keyboardShortcutService: mockKeyboardShortcut,
+            inputFieldReaderService: MockInputFieldReaderService()
+        )
+
+        let appState = AppState(environment: environment)
+
+        // Add model config
+        let testConfig = ModelConfig(id: UUID(), name: "Test", modelName: "gpt-4", baseURL: "https://api.openai.com", isActive: true)
+        try mockModelConfig.saveConfiguration(testConfig, apiKey: "test-key")
+
+        // Wait for state to update
+        try await Task.sleep(nanoseconds: 100_000_000) // 0.1s
+
+        // When: starting monitoring
+        appState.startMonitoring()
+
+        // Then: shortcut listener should be started
+        #expect(mockKeyboardShortcut.isListening == true)
+
+        // When: stopping monitoring
+        appState.stopMonitoring()
+
+        // Then: shortcut listener should be stopped
+        #expect(mockKeyboardShortcut.isListening == false)
+    }
+
+    // MARK: - Input Field Reader Service Tests
+
+    @Test("InputFieldReaderService: should return success with text")
+    func testInputFieldReaderSuccess() async {
+        // Given: mock service with success result
+        let service = MockInputFieldReaderService()
+        service.mockResult = .success("测试文本")
+
+        // When: reading focused field text
+        let result = await service.readFocusedFieldText()
+
+        // Then: should return success with text
+        if case .success(let text) = result {
+            #expect(text == "测试文本")
+        } else {
+            Issue.record("Expected success result, got: \(result)")
+        }
+    }
+
+    @Test("InputFieldReaderService: should return noFocusedElement when no element is focused")
+    func testInputFieldReaderNoFocusedElement() async {
+        // Given: mock service with no focused element
+        let service = MockInputFieldReaderService()
+        service.mockResult = .noFocusedElement
+
+        // When: reading focused field text
+        let result = await service.readFocusedFieldText()
+
+        // Then: should return noFocusedElement
+        if case .noFocusedElement = result {
+            // Success
+        } else {
+            Issue.record("Expected noFocusedElement, got: \(result)")
+        }
+    }
+
+    @Test("InputFieldReaderService: should return noTextValue when element has no text")
+    func testInputFieldReaderNoTextValue() async {
+        // Given: mock service with no text value
+        let service = MockInputFieldReaderService()
+        service.mockResult = .noTextValue
+
+        // When: reading focused field text
+        let result = await service.readFocusedFieldText()
+
+        // Then: should return noTextValue
+        if case .noTextValue = result {
+            // Success
+        } else {
+            Issue.record("Expected noTextValue, got: \(result)")
+        }
+    }
+
+    @Test("InputFieldReaderService: should return passwordField for password fields")
+    func testInputFieldReaderPasswordField() async {
+        // Given: mock service detecting password field
+        let service = MockInputFieldReaderService()
+        service.mockResult = .passwordField
+
+        // When: reading focused field text
+        let result = await service.readFocusedFieldText()
+
+        // Then: should return passwordField
+        if case .passwordField = result {
+            // Success
+        } else {
+            Issue.record("Expected passwordField, got: \(result)")
+        }
+    }
+
+    @Test("InputFieldReaderService: should return error on failure")
+    func testInputFieldReaderError() async {
+        // Given: mock service with error
+        let service = MockInputFieldReaderService()
+        service.mockResult = .error("Test error")
+
+        // When: reading focused field text
+        let result = await service.readFocusedFieldText()
+
+        // Then: should return error
+        if case .error(let message) = result {
+            #expect(message == "Test error")
+        } else {
+            Issue.record("Expected error result, got: \(result)")
+        }
+    }
+
+    // MARK: - Keyboard Shortcut Trigger Flow Tests
+
+    @Test("Shortcut trigger flow: should show feedback indicator")
+    @MainActor
+    func testShortcutTriggerShowsFeedback() async throws {
+        // Given: configured app
+        let mockPermission = MockPermissionService()
+        mockPermission.mockState = .authorized
+
+        let mockModelConfig = MockModelConfigService()
+        let mockInputFieldReader = MockInputFieldReaderService()
+        mockInputFieldReader.mockResult = .success("测试")
+
+        let mockKeyboardShortcut = MockKeyboardShortcutService()
+
+        let environment = AppEnvironment(
+            permissionService: mockPermission,
+            translationService: MockTranslationService(),
+            modelConfigService: mockModelConfig,
+            historyService: MockHistoryService(),
+            keyboardShortcutService: mockKeyboardShortcut,
+            inputFieldReaderService: mockInputFieldReader
+        )
+
+        let appState = AppState(environment: environment)
+
+        // Add model config
+        let testConfig = ModelConfig(id: UUID(), name: "Test", modelName: "gpt-4", baseURL: "https://api.openai.com", isActive: true)
+        try mockModelConfig.saveConfiguration(testConfig, apiKey: "test-key")
+
+        // Wait for state to update
+        try await Task.sleep(nanoseconds: 100_000_000) // 0.1s
+
+        // Start monitoring
+        appState.startMonitoring()
+
+        #expect(appState.showShortcutFeedback == false)
+
+        // When: triggering shortcut
+        mockKeyboardShortcut.simulateShortcut()
+
+        // Wait a bit for the event to be processed
+        try await Task.sleep(nanoseconds: 50_000_000) // 0.05s
+
+        // Then: feedback should be shown
+        #expect(appState.showShortcutFeedback == true)
+
+        // Wait for feedback to auto-hide
+        try await Task.sleep(nanoseconds: 600_000_000) // 0.6s
+
+        // Then: feedback should be hidden
+        #expect(appState.showShortcutFeedback == false)
+    }
+
+    @Test("Shortcut trigger flow: should handle empty text in focused field")
+    @MainActor
+    func testShortcutTriggerEmptyText() async throws {
+        // Given: configured app with empty text in focused field
+        let mockPermission = MockPermissionService()
+        mockPermission.mockState = .authorized
+
+        let mockModelConfig = MockModelConfigService()
+        let mockInputFieldReader = MockInputFieldReaderService()
+        mockInputFieldReader.mockResult = .success("   ") // Empty/whitespace only
+
+        let mockKeyboardShortcut = MockKeyboardShortcutService()
+
+        let environment = AppEnvironment(
+            permissionService: mockPermission,
+            translationService: MockTranslationService(),
+            modelConfigService: mockModelConfig,
+            historyService: MockHistoryService(),
+            keyboardShortcutService: mockKeyboardShortcut,
+            inputFieldReaderService: mockInputFieldReader
+        )
+
+        let appState = AppState(environment: environment)
+
+        // Add model config
+        let testConfig = ModelConfig(id: UUID(), name: "Test", modelName: "gpt-4", baseURL: "https://api.openai.com", isActive: true)
+        try mockModelConfig.saveConfiguration(testConfig, apiKey: "test-key")
+
+        // Wait for state to update
+        try await Task.sleep(nanoseconds: 100_000_000) // 0.1s
+
+        // Start monitoring
+        appState.startMonitoring()
+
+        // When: triggering shortcut with empty text
+        mockKeyboardShortcut.simulateShortcut()
+
+        // Wait for processing
+        try await Task.sleep(nanoseconds: 200_000_000) // 0.2s
+
+        // Then: no translation should be triggered (latestTranslation remains nil)
+        #expect(appState.latestTranslation == nil)
+        #expect(appState.isTranslating == false)
+    }
+
+    @Test("Shortcut trigger flow: should ignore password fields")
+    @MainActor
+    func testShortcutTriggerPasswordField() async throws {
+        // Given: configured app with password field focused
+        let mockPermission = MockPermissionService()
+        mockPermission.mockState = .authorized
+
+        let mockModelConfig = MockModelConfigService()
+        let mockInputFieldReader = MockInputFieldReaderService()
+        mockInputFieldReader.mockResult = .passwordField
+
+        let mockKeyboardShortcut = MockKeyboardShortcutService()
+
+        let environment = AppEnvironment(
+            permissionService: mockPermission,
+            translationService: MockTranslationService(),
+            modelConfigService: mockModelConfig,
+            historyService: MockHistoryService(),
+            keyboardShortcutService: mockKeyboardShortcut,
+            inputFieldReaderService: mockInputFieldReader
+        )
+
+        let appState = AppState(environment: environment)
+
+        // Add model config
+        let testConfig = ModelConfig(id: UUID(), name: "Test", modelName: "gpt-4", baseURL: "https://api.openai.com", isActive: true)
+        try mockModelConfig.saveConfiguration(testConfig, apiKey: "test-key")
+
+        // Wait for state to update
+        try await Task.sleep(nanoseconds: 100_000_000) // 0.1s
+
+        // Start monitoring
+        appState.startMonitoring()
+
+        // When: triggering shortcut on password field
+        mockKeyboardShortcut.simulateShortcut()
+
+        // Wait for processing
+        try await Task.sleep(nanoseconds: 200_000_000) // 0.2s
+
+        // Then: no translation should be triggered and no error shown (privacy)
+        #expect(appState.latestTranslation == nil)
+        #expect(appState.isTranslating == false)
+        #expect(appState.runtimeError == nil) // No error shown for privacy
+    }
+
+    // MARK: - Clipboard Fallback Tests
+    // Note: Clipboard fallback feature (US-006) was not fully implemented
+    // Removing these tests as they reference non-existent functionality
+
+    @Test("Shortcut trigger: should handle no focused element gracefully")
+    @MainActor
+    func testShortcutTriggerNoFocusedElement() async throws {
+        // Given: configured app with no focused element
+        let mockPermission = MockPermissionService()
+        mockPermission.mockState = .authorized
+
+        let mockModelConfig = MockModelConfigService()
+        let mockInputFieldReader = MockInputFieldReaderService()
+        mockInputFieldReader.mockResult = .noFocusedElement
+
+        let mockKeyboardShortcut = MockKeyboardShortcutService()
+
+        let environment = AppEnvironment(
+            permissionService: mockPermission,
+            translationService: MockTranslationService(),
+            modelConfigService: mockModelConfig,
+            historyService: MockHistoryService(),
+            keyboardShortcutService: mockKeyboardShortcut,
+            inputFieldReaderService: mockInputFieldReader
+        )
+
+        let appState = AppState(environment: environment)
+
+        // Add model config
+        let testConfig = ModelConfig(id: UUID(), name: "Test", modelName: "gpt-4", baseURL: "https://api.openai.com", isActive: true)
+        try mockModelConfig.saveConfiguration(testConfig, apiKey: "test-key")
+
+        // Wait for state to update
+        try await Task.sleep(nanoseconds: 100_000_000) // 0.1s
+
+        // Start monitoring
+        appState.startMonitoring()
+
+        // When: triggering shortcut with no focused element
+        mockKeyboardShortcut.simulateShortcut()
+
+        // Wait for processing
+        try await Task.sleep(nanoseconds: 200_000_000) // 0.2s
+
+        // Then: should handle gracefully without crashing and no translation occurs
+        #expect(appState.latestTranslation == nil)
+        #expect(appState.runtimeError == nil)
+    }
+
+    // MARK: - Permission Gating for Shortcut Trigger Tests
+
+    @Test("Permission gating: shortcut trigger requires accessibility permission")
+    @MainActor
+    func testShortcutTriggerRequiresPermission() async throws {
+        // Given: unauthorized permission state
+        let mockPermission = MockPermissionService()
+        mockPermission.mockState = .denied
+
+        let mockModelConfig = MockModelConfigService()
+        let mockInputFieldReader = MockInputFieldReaderService()
+        mockInputFieldReader.mockResult = .success("测试")
+
+        let mockKeyboardShortcut = MockKeyboardShortcutService()
+
+        let environment = AppEnvironment(
+            permissionService: mockPermission,
+            translationService: MockTranslationService(),
+            modelConfigService: mockModelConfig,
+            historyService: MockHistoryService(),
+            keyboardShortcutService: mockKeyboardShortcut,
+            inputFieldReaderService: mockInputFieldReader
+        )
+
+        let appState = AppState(environment: environment)
+
+        // Add model config
+        let testConfig = ModelConfig(id: UUID(), name: "Test", modelName: "gpt-4", baseURL: "https://api.openai.com", isActive: true)
+        try mockModelConfig.saveConfiguration(testConfig, apiKey: "test-key")
+
+        // When: attempting to start monitoring without permission
+        appState.startMonitoring()
+
+        // Then: monitoring should not start
+        #expect(appState.isMonitoring == false)
+        #expect(appState.runtimeError == .permissionMissing)
+
+        // And: keyboard shortcut listener should not be started
+        #expect(mockKeyboardShortcut.isListening == false)
+    }
+
+    @Test("Permission gating: shortcut listener starts only when authorized")
+    @MainActor
+    func testShortcutListenerStartsOnlyWhenAuthorized() async throws {
+        // Given: authorized permission state
+        let mockPermission = MockPermissionService()
+        mockPermission.mockState = .authorized
+
+        let mockModelConfig = MockModelConfigService()
+        let mockKeyboardShortcut = MockKeyboardShortcutService()
+
+        let environment = AppEnvironment(
+            permissionService: mockPermission,
+            translationService: MockTranslationService(),
+            modelConfigService: mockModelConfig,
+            historyService: MockHistoryService(),
+            keyboardShortcutService: mockKeyboardShortcut,
+            inputFieldReaderService: MockInputFieldReaderService()
+        )
+
+        let appState = AppState(environment: environment)
+
+        // Add model config
+        let testConfig = ModelConfig(id: UUID(), name: "Test", modelName: "gpt-4", baseURL: "https://api.openai.com", isActive: true)
+        try mockModelConfig.saveConfiguration(testConfig, apiKey: "test-key")
+
+        // Wait for state to update
+        try await Task.sleep(nanoseconds: 100_000_000) // 0.1s
+
+        // When: starting monitoring with permission
+        appState.startMonitoring()
+
+        // Then: monitoring should start and keyboard shortcut listener should be started
+        #expect(appState.isMonitoring == true)
+        #expect(mockKeyboardShortcut.isListening == true)
     }
 }

@@ -11,7 +11,7 @@ import ApplicationServices
 /// Implementation of InputFieldReaderService using macOS Accessibility API
 class AccessibilityInputFieldReaderService: InputFieldReaderService {
 
-    func readFocusedFieldText() -> InputFieldReadResult {
+    func readFocusedFieldText() async -> InputFieldReadResult {
         // Get the system-wide accessibility object
         let systemWide = AXUIElementCreateSystemWide()
 
