@@ -7,6 +7,7 @@
 
 import SwiftUI
 import AppKit
+import os.log
 
 /// Main history page shown on app launch.
 struct FloatingTranslationView: View {
@@ -178,7 +179,7 @@ struct FloatingTranslationView: View {
             }
         }
 
-        print("[FloatingTranslationView] Copied translation to clipboard: \(text)")
+        Logger.history.debug("Copied translation to clipboard: \(text, privacy: .private)")
     }
 }
 

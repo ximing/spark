@@ -7,6 +7,7 @@
 
 import Foundation
 import Combine
+import os.log
 
 /// Persistent implementation of HistoryService with local-only storage
 class PersistentHistoryService: HistoryService {
@@ -30,12 +31,12 @@ class PersistentHistoryService: HistoryService {
     init() {
         // Load existing history from UserDefaults
         loadHistory()
-        print("📚 History service initialized, isEnabled: \(isEnabled)")
+        Logger.history.info("History service initialized, isEnabled: \(self.isEnabled, privacy: .public)")
     }
 
     func setEnabled(_ enabled: Bool) {
         UserDefaults.standard.set(enabled, forKey: isEnabledKey)
-        print("📚 History recording \(enabled ? "enabled" : "disabled")")
+        Logger.history.info("History recording \(enabled ? "enabled" : "disabled")")
 
         // If disabling, optionally clear existing history
         // For now, we keep existing history when disabling
@@ -44,7 +45,7 @@ class PersistentHistoryService: HistoryService {
     func saveToHistory(_ result: TranslationResult) {
         // Only save if history is enabled
         guard isEnabled else {
-            print("📚 History recording disabled, not saving translation")
+            Logger.history.debug("History recording disabled, not saving translation")
             return
         }
 
@@ -60,7 +61,7 @@ class PersistentHistoryService: HistoryService {
         // Emit updated history
         historySubject.send(currentHistory)
 
-        print("📚 Saved to history: \(result.originalText.prefix(30))... -> \(result.translatedText.prefix(30))...")
+        Logger.history.debug("Saved to history: \(result.originalText.prefix(30), privacy: .private)... -> \(result.translatedText.prefix(30), privacy: .public)...")
     }
 
     func clearHistory() {
@@ -70,14 +71,14 @@ class PersistentHistoryService: HistoryService {
         // Clear persisted history
         UserDefaults.standard.removeObject(forKey: userDefaultsKey)
 
-        print("📚 History cleared")
+        Logger.history.info("History cleared")
     }
 
     // MARK: - Private Methods
 
     private func loadHistory() {
         guard let data = UserDefaults.standard.data(forKey: userDefaultsKey) else {
-            print("📚 No existing history found")
+            Logger.history.debug("No existing history found")
             return
         }
 
@@ -85,9 +86,9 @@ class PersistentHistoryService: HistoryService {
             let decoder = JSONDecoder()
             let items = try decoder.decode([HistoryItem].self, from: data)
             historySubject.send(items)
-            print("📚 Loaded \(items.count) history items from storage")
+            Logger.history.info("Loaded \(items.count, privacy: .public) history items from storage")
         } catch {
-            print("📚 Failed to load history: \(error.localizedDescription)")
+            Logger.history.error("Failed to load history: \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -97,7 +98,7 @@ class PersistentHistoryService: HistoryService {
             let data = try encoder.encode(items)
             UserDefaults.standard.set(data, forKey: userDefaultsKey)
         } catch {
-            print("📚 Failed to persist history: \(error.localizedDescription)")
+            Logger.history.error("Failed to persist history: \(error.localizedDescription, privacy: .public)")
         }
     }
 }

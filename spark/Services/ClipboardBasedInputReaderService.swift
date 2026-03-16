@@ -9,6 +9,7 @@ import Foundation
 import AppKit
 import Carbon
 import ApplicationServices
+import os.log
 
 /// Service that reads focused input field text by simulating keyboard shortcuts
 /// This is more reliable than Accessibility API as it works across most macOS applications
@@ -75,14 +76,14 @@ final class ClipboardBasedInputReaderService: InputFieldReaderService {
     private func simulateKeyPress(keyCode: CGKeyCode, flags: CGEventFlags) {
         // Create key down event
         guard let keyDownEvent = CGEvent(keyboardEventSource: nil, virtualKey: keyCode, keyDown: true) else {
-            print("Failed to create key down event for keyCode: \(keyCode)")
+            Logger.input.error("Failed to create key down event for keyCode: \(keyCode, privacy: .public)")
             return
         }
         keyDownEvent.flags = flags
-        
+
         // Create key up event
         guard let keyUpEvent = CGEvent(keyboardEventSource: nil, virtualKey: keyCode, keyDown: false) else {
-            print("Failed to create key up event for keyCode: \(keyCode)")
+            Logger.input.error("Failed to create key up event for keyCode: \(keyCode, privacy: .public)")
             return
         }
         keyUpEvent.flags = flags

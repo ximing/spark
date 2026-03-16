@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import os.log
 
 struct ModelSettingsView: View {
     @EnvironmentObject var appState: AppState
@@ -281,7 +282,7 @@ struct ModelSettingsView: View {
         do {
             try appState.setActiveModelConfiguration(id: config.id)
         } catch {
-            print("Failed to set active model: \(error)")
+            Logger.settings.error("Failed to set active model: \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -289,7 +290,7 @@ struct ModelSettingsView: View {
         do {
             try appState.deleteModelConfiguration(id: config.id)
         } catch {
-            print("Failed to delete model: \(error)")
+            Logger.settings.error("Failed to delete model: \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -925,7 +926,7 @@ private class SettingsShortcutRecorderHelper {
             },
             userInfo: Unmanaged.passUnretained(self).toOpaque()
         ) else {
-            print("Failed to create event tap for settings shortcut recorder")
+            Logger.settings.error("Failed to create event tap for settings shortcut recorder")
             return
         }
 

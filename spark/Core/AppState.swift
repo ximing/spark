@@ -8,6 +8,7 @@
 import Foundation
 import Combine
 import AppKit
+import os.log
 
 /// Runtime error types that can occur during app operation
 enum RuntimeError: Equatable {
@@ -114,7 +115,7 @@ class AppState: ObservableObject {
                         try self.environment.modelConfigService.setActiveConfiguration(id: fallbackConfig.id)
                         return
                     } catch {
-                        print("⚠️ Failed to auto-activate fallback model: \(error)")
+                        Logger.appState.warning("Failed to auto-activate fallback model: \(error.localizedDescription, privacy: .public)")
                     }
                 }
 
@@ -142,7 +143,7 @@ class AppState: ObservableObject {
         isMonitoring = true
         // Start listening for keyboard shortcuts
         environment.keyboardShortcutService.startListening()
-        print("⌨️ Keyboard shortcut listener started")
+        Logger.appState.info("Keyboard shortcut listener started")
     }
 
     /// Handles incoming input events from the keyboard shortcut trigger
@@ -150,18 +151,18 @@ class AppState: ObservableObject {
         // Record timestamp when input event arrives
         inputEventTimestamp = Date()
 
-        print("📝 Input event received: \(text.prefix(50))...")
+        Logger.input.debug("Input event received: \(text.prefix(50), privacy: .private)")
 
         // Trigger translation if we have an active model config
         guard let activeConfig = activeModelConfig else {
-            print("⚠️ Translation skipped: no active model config")
+            Logger.translation.warning("Translation skipped: no active model config")
             runtimeError = .modelUnavailable
             return
         }
 
         // Get API key from secure storage
         guard let apiKey = getAPIKey(for: activeConfig.id) else {
-            print("⚠️ Translation skipped: no API key found for active model")
+            Logger.translation.warning("Translation skipped: no API key found for active model")
             runtimeError = .modelUnavailable
             return
         }
@@ -186,7 +187,7 @@ class AppState: ObservableObject {
 
                 // Check if task was cancelled before updating UI
                 guard !Task.isCancelled else {
-                    print("⚠️ Translation cancelled (newer translation in progress)")
+                    Logger.translation.debug("Translation cancelled (newer translation in progress)")
                     return
                 }
 
@@ -203,7 +204,7 @@ class AppState: ObservableObject {
                     if let startTime = self.inputEventTimestamp {
                         let latency = Date().timeIntervalSince(startTime)
                         self.lastTranslationLatency = latency
-                        print("⏱️ Translation latency: \(String(format: "%.3f", latency))s")
+                        Logger.translation.info("Translation latency: \(String(format: "%.3f", latency), privacy: .public)s")
                     }
 
                     // Add to history if enabled
@@ -214,12 +215,12 @@ class AppState: ObservableObject {
                     // Clear loading state
                     self.isTranslating = false
 
-                    print("✅ Translation completed: \(translatedText.prefix(50))...")
+                    Logger.translation.info("Translation completed: \(translatedText.prefix(50), privacy: .public)...")
                 }
             } catch {
                 // Check if task was cancelled
                 guard !Task.isCancelled else {
-                    print("⚠️ Translation cancelled (newer translation in progress)")
+                    Logger.translation.debug("Translation cancelled (newer translation in progress)")
                     return
                 }
 
@@ -227,7 +228,7 @@ class AppState: ObservableObject {
                 await MainActor.run {
                     self.isTranslating = false
                     self.runtimeError = .translationFailed(error.localizedDescription)
-                    print("❌ Translation failed: \(error.localizedDescription)")
+                    Logger.translation.error("Translation failed: \(error.localizedDescription, privacy: .public)")
                 }
             }
         }
@@ -235,7 +236,7 @@ class AppState: ObservableObject {
 
     /// Handles keyboard shortcut trigger events
     private func handleKeyboardShortcutTriggered() async {
-        print("⌨️ Keyboard shortcut triggered")
+        Logger.input.info("Keyboard shortcut triggered")
 
         // Show shortcut feedback indicator
         showShortcutFeedback = true
@@ -247,7 +248,7 @@ class AppState: ObservableObject {
 
         // Check if we have an active model configuration
         guard activeModelConfig != nil else {
-            print("⚠️ Shortcut translation skipped: no active model config")
+            Logger.input.warning("Shortcut translation skipped: no active model config")
             runtimeError = .modelUnavailable
             return
         }
@@ -259,22 +260,22 @@ class AppState: ObservableObject {
         case .success(let text):
             // Check if the text is not empty
             guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-                print("⚠️ Shortcut translation skipped: focused field is empty")
+                Logger.input.warning("Shortcut translation skipped: focused field is empty")
                 return
             }
 
-            print("📖 Read text from focused field: \(text.prefix(50))...")
+            Logger.input.debug("Read text from focused field: \(text.prefix(50), privacy: .private)")
             // Pass the extracted text to the existing translation pipeline
             handleInputEvent(text)
 
         case .noFocusedElement, .noTextValue:
-            print("⚠️ Shortcut translation skipped: no text in focused field")
+            Logger.input.warning("Shortcut translation skipped: no text in focused field")
 
         case .passwordField:
-            print("🔒 Shortcut translation skipped: password field detected (security)")
+            Logger.input.info("Shortcut translation skipped: password field detected (security)")
 
         case .error(let message):
-            print("❌ Shortcut translation failed: \(message)")
+            Logger.input.error("Shortcut translation failed: \(message, privacy: .public)")
             runtimeError = .translationFailed("Could not read focused field: \(message)")
         }
     }
@@ -346,10 +347,10 @@ class AppState: ObservableObject {
         if permissionState.isAuthorized, activeModelConfig != nil {
             isMonitoring = true
             environment.keyboardShortcutService.startListening()
-            print("⌨️ Keyboard shortcut service restarted")
+            Logger.appState.info("Keyboard shortcut service restarted")
         } else {
             isMonitoring = false
-            print("⚠️ Keyboard shortcut service not restarted: permission or model missing")
+            Logger.appState.warning("Keyboard shortcut service not restarted: permission or model missing")
         }
     }
 
