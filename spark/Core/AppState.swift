@@ -109,6 +109,14 @@ class AppState: ObservableObject {
             }
             .store(in: &cancellables)
 
+        // Subscribe to keyboard shortcut events
+        environment.keyboardShortcutService.shortcutTriggered
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] in
+                self?.handleKeyboardShortcutTriggered()
+            }
+            .store(in: &cancellables)
+
         // Track active model configuration changes and auto-start monitoring
         environment.modelConfigService.configurations
             .receive(on: DispatchQueue.main)
@@ -244,6 +252,51 @@ class AppState: ObservableObject {
         }
     }
 
+    /// Handles keyboard shortcut trigger events
+    private func handleKeyboardShortcutTriggered() {
+        print("⌨️ Keyboard shortcut triggered")
+
+        // Check if we have an active model configuration
+        guard activeModelConfig != nil else {
+            print("⚠️ Shortcut translation skipped: no active model config")
+            runtimeError = .modelUnavailable
+            return
+        }
+
+        // Read text from the currently focused input field
+        let readResult = environment.inputFieldReaderService.readFocusedFieldText()
+
+        switch readResult {
+        case .success(let text):
+            // Check if the text is not empty
+            guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                print("⚠️ Shortcut translation skipped: focused field is empty")
+                return
+            }
+
+            print("📖 Read text from focused field: \(text.prefix(50))...")
+            // Pass the extracted text to the existing translation pipeline
+            handleInputEvent(text)
+
+        case .noFocusedElement:
+            print("⚠️ Shortcut translation skipped: no focused element")
+            // Don't show error to user, just log it
+
+        case .noTextValue:
+            print("⚠️ Shortcut translation skipped: focused element has no text value")
+            // Don't show error to user, just log it
+
+        case .passwordField:
+            print("🔒 Shortcut translation skipped: password field detected (security)")
+            // Don't show error to user for privacy/security reasons
+
+        case .error(let message):
+            print("❌ Shortcut translation failed: \(message)")
+            // Show error to user for actual failures
+            runtimeError = .translationFailed("Could not read focused field: \(message)")
+        }
+    }
+
     /// Checks and updates permission state
     func checkPermissions() {
         permissionState = environment.permissionService.checkPermissionState()
@@ -290,12 +343,18 @@ class AppState: ObservableObject {
 
         environment.inputMonitoringService.startMonitoring()
         isMonitoring = environment.inputMonitoringService.isMonitoring
+
+        // Start listening for keyboard shortcuts
+        environment.keyboardShortcutService.startListening()
     }
 
     /// Stops input monitoring
     func stopMonitoring() {
         environment.inputMonitoringService.stopMonitoring()
         isMonitoring = environment.inputMonitoringService.isMonitoring
+
+        // Stop listening for keyboard shortcuts
+        environment.keyboardShortcutService.stopListening()
     }
 
     // MARK: - Model Configuration Management

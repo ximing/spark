@@ -60,7 +60,7 @@
       ],
       "priority": 4,
       "passes": true,
-      "notes": "Enhanced async translation pipeline: Added isTranslating state property to track translation in progress. Implemented task cancellation mechanism to prevent race conditions when multiple translations are triggered rapidly - currentTranslationTask stores the active task and cancels it before starting a new one. Added Task.isCancelled checks in the translation pipeline to gracefully handle cancellation. Updated FloatingTranslationWindow to show loading indicator when isTranslating is true, preserving previous translation result while new translation loads. Previous translation remains visible during new translation as required. Build succeeds."
+      "notes": "Successfully wired keyboard shortcut trigger to translation pipeline. Added inputFieldReaderService to AppEnvironment and production() factory. AppState now subscribes to keyboardShortcutService.shortcutTriggered events in setupBindings(). Created handleKeyboardShortcutTriggered() method that reads focused field text using inputFieldReaderService, handles all edge cases (no focused element, no text, password field, empty text, errors), and passes extracted text to existing handleInputEvent() for translation. Keyboard shortcut service starts/stops with monitoring state. Translation executes asynchronously via existing pipeline. Error cases are logged but don't show user-facing errors except for actual API failures. Build succeeds."
     },
     {
       "id": "US-005",

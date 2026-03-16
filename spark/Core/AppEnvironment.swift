@@ -15,6 +15,7 @@ class AppEnvironment {
     let modelConfigService: ModelConfigService
     let historyService: HistoryService
     let keyboardShortcutService: KeyboardShortcutService
+    let inputFieldReaderService: InputFieldReaderService
 
     init(
         permissionService: PermissionService,
@@ -22,7 +23,8 @@ class AppEnvironment {
         translationService: TranslationService,
         modelConfigService: ModelConfigService,
         historyService: HistoryService,
-        keyboardShortcutService: KeyboardShortcutService
+        keyboardShortcutService: KeyboardShortcutService,
+        inputFieldReaderService: InputFieldReaderService
     ) {
         self.permissionService = permissionService
         self.inputMonitoringService = inputMonitoringService
@@ -30,6 +32,7 @@ class AppEnvironment {
         self.modelConfigService = modelConfigService
         self.historyService = historyService
         self.keyboardShortcutService = keyboardShortcutService
+        self.inputFieldReaderService = inputFieldReaderService
     }
 
     /// Creates a default production environment with real implementations
@@ -53,13 +56,17 @@ class AppEnvironment {
         // Real keyboard shortcut service implementation
         let keyboardShortcutService = GlobalKeyboardShortcutService()
 
+        // Real input field reader service implementation
+        let inputFieldReaderService = AccessibilityInputFieldReaderService()
+
         return AppEnvironment(
             permissionService: permissionService,
             inputMonitoringService: inputMonitoringService,
             translationService: translationService,
             modelConfigService: modelConfigService,
             historyService: historyService,
-            keyboardShortcutService: keyboardShortcutService
+            keyboardShortcutService: keyboardShortcutService,
+            inputFieldReaderService: inputFieldReaderService
         )
     }
 }
