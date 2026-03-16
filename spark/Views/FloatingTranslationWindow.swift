@@ -198,7 +198,7 @@ private struct HistoryItemRow: View {
                     .foregroundColor(.secondary)
                     .frame(width: 30, alignment: .leading)
                 Text(item.originalText)
-                    .font(.caption)
+                    .font(.body)
                     .foregroundColor(.primary)
                     .lineLimit(2)
                     .textSelection(.enabled)
