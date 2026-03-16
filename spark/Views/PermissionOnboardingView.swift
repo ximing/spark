@@ -11,10 +11,19 @@ import SwiftUI
 struct PermissionOnboardingView: View {
     @EnvironmentObject var appState: AppState
 
+    // Read configured keyboard shortcut from UserDefaults
+    private var configuredShortcut: KeyboardShortcut {
+        if let rawValue = UserDefaults.standard.string(forKey: "keyboardShortcut"),
+           let shortcut = KeyboardShortcut(rawValue: rawValue) {
+            return shortcut
+        }
+        return .doubleControl // Default
+    }
+
     var body: some View {
         VStack(spacing: 24) {
             // Icon
-            Image(systemName: "lock.shield")
+            Image(systemName: "keyboard")
                 .font(.system(size: 64))
                 .foregroundColor(.blue)
 
@@ -23,12 +32,20 @@ struct PermissionOnboardingView: View {
                 .font(.title)
                 .fontWeight(.bold)
 
-            // Description
-            Text("Spark needs accessibility permission to monitor your input across applications and provide real-time English translations.")
-                .font(.body)
-                .multilineTextAlignment(.center)
-                .foregroundColor(.secondary)
-                .padding(.horizontal, 32)
+            // Main description - shortcut-based trigger
+            VStack(spacing: 12) {
+                Text("Press **\(configuredShortcut.displayName)** to translate text from any focused input field.")
+                    .font(.body)
+                    .multilineTextAlignment(.center)
+                    .foregroundColor(.primary)
+                    .padding(.horizontal, 32)
+
+                Text("Spark needs accessibility permission to read text from focused input fields when you trigger the shortcut.")
+                    .font(.body)
+                    .multilineTextAlignment(.center)
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 32)
+            }
 
             // Permission status indicator
             permissionStatusView
@@ -104,7 +121,7 @@ struct PermissionOnboardingView: View {
         case .denied:
             return "Permission denied - please enable in System Settings"
         case .authorized:
-            return "Permission granted! Starting monitoring..."
+            return "Permission granted! Ready to translate with \(configuredShortcut.displayName)"
         case .unknown:
             return "Unable to determine permission status"
         }
