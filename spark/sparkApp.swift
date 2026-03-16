@@ -16,6 +16,7 @@ extension Notification.Name {
 struct sparkApp: App {
     @StateObject private var appState: AppState
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    @State private var showOnboarding = true
 
     init() {
         let environment = AppEnvironment.production()
@@ -24,15 +25,43 @@ struct sparkApp: App {
 
     var body: some Scene {
         WindowGroup("Spark") {
-            FloatingTranslationView(
-                onOpenSettings: {
-                    appDelegate.showSettingsWindow()
+            Group {
+                if showOnboarding {
+                    PermissionOnboardingView(
+                        onContinue: {
+                            appDelegate.prepare(appState: appState)
+                        }
+                    )
+                    .environmentObject(appState)
+                    .frame(minWidth: 420, minHeight: 480)
+                } else {
+                    FloatingTranslationView(
+                        onOpenSettings: {
+                            appDelegate.showSettingsWindow()
+                        }
+                    )
+                    .environmentObject(appState)
+                    .frame(minWidth: 420, minHeight: 320)
+                    .onAppear {
+                        appDelegate.prepare(appState: appState)
+                    }
                 }
-            )
-            .environmentObject(appState)
-            .frame(minWidth: 420, minHeight: 320)
-            .onAppear {
-                appDelegate.prepare(appState: appState)
+            }
+            .onChange(of: appState.permissionState.isAuthorized) { _, isAuthorized in
+                // Auto-transition from onboarding to main view when permission is granted
+                if isAuthorized {
+                    showOnboarding = false
+                    // Reset prepare flag so monitoring can start when main view appears
+                    appDelegate.resetPrepare()
+                }
+            }
+            .onChange(of: showOnboarding) { _, newValue in
+                // Sync onboarding state with permission state on launch
+                if !newValue && !appState.permissionState.isAuthorized {
+                    showOnboarding = true
+                } else if newValue && appState.permissionState.isAuthorized {
+                    showOnboarding = false
+                }
             }
         }
         .defaultSize(width: 460, height: 620)
@@ -77,8 +106,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         self.appState = appState
 
-        // Startup is now direct: launch into history list and start monitoring immediately.
+        // Start monitoring after permission is authorized
         appState.startMonitoring()
+    }
+
+    /// Resets the prepare flag to allow monitoring to start when transitioning from onboarding
+    func resetPrepare() {
+        didPrepare = false
     }
 
     private func setupMenuBarItem() {
