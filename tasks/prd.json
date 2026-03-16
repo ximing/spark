@@ -43,8 +43,8 @@
         "xcodebuild -scheme spark -configuration Debug build succeeds"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created KeyboardShortcut enum model with 5 supported shortcuts: double-Control (default), Cmd+Shift+T, Cmd+Option+T, Cmd+Shift+Space, and Cmd+Option+Space. Updated GlobalKeyboardShortcutService to read shortcut configuration from UserDefaults and handle both double-Control (with timing logic) and regular key combinations. Added keyboard shortcut configuration UI section in ModelSettingsView with radio button list for selecting shortcuts. Configuration is persisted to UserDefaults with key 'keyboardShortcut'. Changes take effect immediately via restartKeyboardShortcutService() which stops and starts the listener to pick up new configuration. Added keyboardShortcutService to AppEnvironment and created MockKeyboardShortcutService for tests. Build succeeds."
     },
     {
       "id": "US-004",

@@ -14,19 +14,22 @@ class AppEnvironment {
     let translationService: TranslationService
     let modelConfigService: ModelConfigService
     let historyService: HistoryService
+    let keyboardShortcutService: KeyboardShortcutService
 
     init(
         permissionService: PermissionService,
         inputMonitoringService: InputMonitoringService,
         translationService: TranslationService,
         modelConfigService: ModelConfigService,
-        historyService: HistoryService
+        historyService: HistoryService,
+        keyboardShortcutService: KeyboardShortcutService
     ) {
         self.permissionService = permissionService
         self.inputMonitoringService = inputMonitoringService
         self.translationService = translationService
         self.modelConfigService = modelConfigService
         self.historyService = historyService
+        self.keyboardShortcutService = keyboardShortcutService
     }
 
     /// Creates a default production environment with real implementations
@@ -47,12 +50,16 @@ class AppEnvironment {
         // Real history service implementation
         let historyService = PersistentHistoryService()
 
+        // Real keyboard shortcut service implementation
+        let keyboardShortcutService = GlobalKeyboardShortcutService()
+
         return AppEnvironment(
             permissionService: permissionService,
             inputMonitoringService: inputMonitoringService,
             translationService: translationService,
             modelConfigService: modelConfigService,
-            historyService: historyService
+            historyService: historyService,
+            keyboardShortcutService: keyboardShortcutService
         )
     }
 }

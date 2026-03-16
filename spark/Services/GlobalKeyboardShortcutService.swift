@@ -10,7 +10,7 @@ import Combine
 import AppKit
 import Carbon
 
-/// Implementation of KeyboardShortcutService that detects double-Control key press
+/// Implementation of KeyboardShortcutService that detects customizable keyboard shortcuts
 class GlobalKeyboardShortcutService: KeyboardShortcutService {
 
     // MARK: - Properties
@@ -19,6 +19,15 @@ class GlobalKeyboardShortcutService: KeyboardShortcutService {
     private var eventMonitor: Any?
     private var lastControlKeyPressTime: Date?
     private let doublePressTolerance: TimeInterval = 0.3 // 300ms
+
+    /// Current configured shortcut (loaded from UserDefaults)
+    private var currentShortcut: KeyboardShortcut {
+        if let rawValue = UserDefaults.standard.string(forKey: "keyboardShortcut"),
+           let shortcut = KeyboardShortcut(rawValue: rawValue) {
+            return shortcut
+        }
+        return .doubleControl // Default
+    }
 
     var shortcutTriggered: AnyPublisher<Void, Never> {
         shortcutSubject.eraseToAnyPublisher()
@@ -54,6 +63,20 @@ class GlobalKeyboardShortcutService: KeyboardShortcutService {
     // MARK: - Private Methods
 
     private func handleKeyEvent(_ event: NSEvent) {
+        let shortcut = currentShortcut
+
+        // Handle double-Control separately (requires timing logic)
+        if shortcut == .doubleControl {
+            handleDoubleControlEvent(event)
+        } else {
+            // Handle regular key combinations
+            if shortcut.matches(event: event) {
+                shortcutSubject.send(())
+            }
+        }
+    }
+
+    private func handleDoubleControlEvent(_ event: NSEvent) {
         // Check if this is a Control key press
         // We use flagsChanged event type to detect modifier keys
         guard event.type == .flagsChanged else { return }

@@ -148,6 +148,28 @@ class MockHistoryService: HistoryService {
     }
 }
 
+class MockKeyboardShortcutService: KeyboardShortcutService {
+    private let shortcutSubject = PassthroughSubject<Void, Never>()
+    var shortcutTriggered: AnyPublisher<Void, Never> {
+        shortcutSubject.eraseToAnyPublisher()
+    }
+
+    private(set) var isListening: Bool = false
+
+    func startListening() {
+        isListening = true
+    }
+
+    func stopListening() {
+        isListening = false
+    }
+
+    // Helper for testing
+    func simulateShortcut() {
+        shortcutSubject.send(())
+    }
+}
+
 // MARK: - Test Suite
 
 @Suite("Spark Core Functionality Tests")
@@ -172,7 +194,8 @@ struct SparkTests {
             inputMonitoringService: mockMonitoring,
             translationService: mockTranslation,
             modelConfigService: mockModelConfig,
-            historyService: mockHistory
+            historyService: mockHistory,
+            keyboardShortcutService: MockKeyboardShortcutService()
         )
 
         let appState = AppState(environment: environment)
@@ -213,7 +236,8 @@ struct SparkTests {
             inputMonitoringService: mockMonitoring,
             translationService: mockTranslation,
             modelConfigService: mockModelConfig,
-            historyService: mockHistory
+            historyService: mockHistory,
+            keyboardShortcutService: MockKeyboardShortcutService()
         )
 
         let appState = AppState(environment: environment)
@@ -657,7 +681,8 @@ struct SparkTests {
             inputMonitoringService: mockMonitoring,
             translationService: mockTranslation,
             modelConfigService: mockModelConfig,
-            historyService: mockHistory
+            historyService: mockHistory,
+            keyboardShortcutService: MockKeyboardShortcutService()
         )
 
         let appState = AppState(environment: environment)

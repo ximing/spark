@@ -14,6 +14,13 @@ struct ModelSettingsView: View {
     @State private var testingConfigId: UUID?
     @State private var testResult: String?
     @State private var testError: String?
+    @State private var selectedShortcut: KeyboardShortcut = {
+        if let rawValue = UserDefaults.standard.string(forKey: "keyboardShortcut"),
+           let shortcut = KeyboardShortcut(rawValue: rawValue) {
+            return shortcut
+        }
+        return .doubleControl
+    }()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -122,6 +129,75 @@ struct ModelSettingsView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding()
+            }
+
+            // Keyboard Shortcut Settings Section
+            if !appState.modelConfigurations.isEmpty {
+                Divider()
+                    .padding(.vertical, 8)
+
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Keyboard Shortcut")
+                        .font(.headline)
+                        .foregroundColor(.secondary)
+
+                    VStack(alignment: .leading, spacing: 16) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Translation trigger")
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+
+                                Text("Choose the keyboard shortcut to trigger translation of focused input field")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+
+                            ForEach(KeyboardShortcut.allCases, id: \.self) { shortcut in
+                                Button(action: {
+                                    selectedShortcut = shortcut
+                                    UserDefaults.standard.set(shortcut.rawValue, forKey: "keyboardShortcut")
+                                    // Restart the keyboard shortcut service to apply changes
+                                    restartKeyboardShortcutService()
+                                }) {
+                                    HStack {
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text(shortcut.displayName)
+                                                .font(.subheadline)
+                                                .fontWeight(.medium)
+                                                .foregroundColor(.primary)
+
+                                            Text(shortcut.description)
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                        }
+
+                                        Spacer()
+
+                                        if selectedShortcut == shortcut {
+                                            Image(systemName: "checkmark.circle.fill")
+                                                .foregroundColor(.blue)
+                                        } else {
+                                            Image(systemName: "circle")
+                                                .foregroundColor(.secondary)
+                                        }
+                                    }
+                                    .padding(12)
+                                    .background(
+                                        selectedShortcut == shortcut
+                                            ? Color.blue.opacity(0.1)
+                                            : Color.gray.opacity(0.05)
+                                    )
+                                    .cornerRadius(8)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                    .padding()
+                    .background(Color.gray.opacity(0.05))
+                    .cornerRadius(12)
+                }
             }
 
             // Debounce Settings Section
@@ -304,6 +380,12 @@ struct ModelSettingsView: View {
         } catch {
             print("Failed to delete model: \(error)")
         }
+    }
+
+    private func restartKeyboardShortcutService() {
+        // Stop and restart the keyboard shortcut service to pick up new configuration
+        appState.environment.keyboardShortcutService.stopListening()
+        appState.environment.keyboardShortcutService.startListening()
     }
 }
 
