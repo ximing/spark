@@ -1,0 +1,44 @@
+# Ralph Progress Log
+Started: Mon Mar 16 09:30:00 CST 2026
+---
+
+## Codebase Patterns
+- Project uses Xcode objectVersion 77 with PBXFileSystemSynchronizedRootGroup - all files in directories are automatically included in build
+- SwiftUI with Combine for reactive state management
+- Protocol-based architecture for testability and modularity
+- AppEnvironment acts as lightweight DI container for service wiring
+- AppState is @MainActor ObservableObject for centralized state management
+
+---
+
+## 2026-03-16 10:00 - US-001
+- Implemented complete architecture baseline for Spark app
+- Created domain models: TranslationResult, ModelConfig, PermissionState, HistoryItem
+- Added service protocol interfaces: PermissionService, InputMonitoringService, TranslationService, ModelConfigService, HistoryService
+- Built AppEnvironment DI container with mock implementations
+- Created AppState for centralized reactive state management
+- Updated sparkApp.swift to wire up the new architecture
+
+**Files changed:**
+- spark/Models/TranslationResult.swift (new)
+- spark/Models/ModelConfig.swift (new)
+- spark/Models/PermissionState.swift (new)
+- spark/Models/HistoryItem.swift (new)
+- spark/Services/PermissionService.swift (new)
+- spark/Services/InputMonitoringService.swift (new)
+- spark/Services/TranslationService.swift (new)
+- spark/Services/ModelConfigService.swift (new)
+- spark/Services/HistoryService.swift (new)
+- spark/Core/AppEnvironment.swift (new)
+- spark/Core/AppState.swift (new)
+- spark/sparkApp.swift (modified)
+
+**Learnings for future iterations:**
+- Xcode 16 with objectVersion 77 automatically includes all files in source directories - no manual pbxproj editing needed
+- Build verification command: `xcodebuild -scheme spark -configuration Debug build`
+- App uses SwiftUI with Combine publishers for reactive data flow
+- Service protocols enable easy mocking and testing
+- AppEnvironment.production() is the factory method for real implementations
+- Mock implementations in AppEnvironment allow app to compile and run before real services are implemented
+- All services follow protocol-first design for dependency injection
+---

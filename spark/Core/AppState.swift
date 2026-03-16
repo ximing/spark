@@ -1,0 +1,274 @@
+//
+//  AppState.swift
+//  spark
+//
+//  Created by Claude on 2026/3/16.
+//
+
+import Foundation
+import Combine
+
+/// Runtime error types that can occur during app operation
+enum RuntimeError: Equatable {
+    case permissionMissing
+    case modelUnavailable
+    case translationFailed(String)
+    case monitoringServiceFailed
+
+    var message: String {
+        switch self {
+        case .permissionMissing:
+            return "Accessibility permission is required to monitor input. Please grant permission in System Settings."
+        case .modelUnavailable:
+            return "No active model configured. Please configure a model in Settings to enable translation."
+        case .translationFailed(let reason):
+            return "Translation failed: \(reason)"
+        case .monitoringServiceFailed:
+            return "Input monitoring service has stopped unexpectedly. Please restart monitoring."
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .permissionMissing:
+            return "lock.shield.fill"
+        case .modelUnavailable:
+            return "brain.fill"
+        case .translationFailed:
+            return "exclamationmark.triangle.fill"
+        case .monitoringServiceFailed:
+            return "antenna.radiowaves.left.and.right.slash"
+        }
+    }
+}
+
+/// Central application state manager
+@MainActor
+class AppState: ObservableObject {
+    @Published var permissionState: PermissionState = .notDetermined
+    @Published var isMonitoring: Bool = false
+    @Published var latestTranslation: TranslationResult?
+    @Published var modelConfigurations: [ModelConfig] = []
+    @Published var activeModelConfig: ModelConfig?
+    @Published var historyItems: [HistoryItem] = []
+    @Published var isHistoryEnabled: Bool = false
+    @Published var runtimeError: RuntimeError?
+    @Published var debounceTimeout: TimeInterval = 1.0 {
+        didSet {
+            // Update the monitoring service when debounce timeout changes
+            environment.inputMonitoringService.setDebounceTimeout(debounceTimeout)
+        }
+    }
+
+    // Latency tracking
+    @Published var lastTranslationLatency: TimeInterval?
+    private var inputEventTimestamp: Date?
+
+    let environment: AppEnvironment
+    private var cancellables = Set<AnyCancellable>()
+
+    init(environment: AppEnvironment) {
+        self.environment = environment
+        setupBindings()
+        // Check initial permission state
+        checkPermissions()
+    }
+
+    private func setupBindings() {
+        // Bind model configurations
+        environment.modelConfigService.configurations
+            .receive(on: DispatchQueue.main)
+            .assign(to: &$modelConfigurations)
+
+        // Bind history items
+        environment.historyService.history
+            .receive(on: DispatchQueue.main)
+            .assign(to: &$historyItems)
+
+        // Initialize history enabled state from service
+        isHistoryEnabled = environment.historyService.isEnabled
+
+        // Subscribe to input events from monitoring service
+        environment.inputMonitoringService.inputEvents
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] text in
+                self?.handleInputEvent(text)
+            }
+            .store(in: &cancellables)
+
+        // Track active model configuration changes
+        environment.modelConfigService.configurations
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] configs in
+                self?.activeModelConfig = configs.first(where: { $0.isActive })
+            }
+            .store(in: &cancellables)
+    }
+
+    /// Handles incoming input events from the monitoring service
+    private func handleInputEvent(_ text: String) {
+        // Record timestamp when input event arrives (after debounce)
+        inputEventTimestamp = Date()
+
+        print("📝 Input event received: \(text.prefix(50))...")
+
+        // Trigger translation if monitoring is active and we have an active model config
+        guard isMonitoring else {
+            print("⚠️ Translation skipped: monitoring not active")
+            return
+        }
+
+        guard let activeConfig = activeModelConfig else {
+            print("⚠️ Translation skipped: no active model config")
+            runtimeError = .modelUnavailable
+            return
+        }
+
+        // Get API key from secure storage
+        guard let apiKey = getAPIKey(for: activeConfig.id) else {
+            print("⚠️ Translation skipped: no API key found for active model")
+            runtimeError = .modelUnavailable
+            return
+        }
+
+        // Clear any previous errors before attempting translation
+        runtimeError = nil
+
+        // Trigger translation asynchronously
+        Task {
+            do {
+                let translatedText = try await environment.translationService.translate(
+                    text: text,
+                    config: activeConfig,
+                    apiKey: apiKey
+                )
+
+                // Update state on main actor
+                await MainActor.run {
+                    self.latestTranslation = TranslationResult(
+                        originalText: text,
+                        translatedText: translatedText,
+                        timestamp: Date(),
+                        modelName: activeConfig.name
+                    )
+
+                    // Calculate latency from input event to translation display
+                    if let startTime = self.inputEventTimestamp {
+                        let latency = Date().timeIntervalSince(startTime)
+                        self.lastTranslationLatency = latency
+                        print("⏱️ Translation latency: \(String(format: "%.3f", latency))s")
+                    }
+
+                    // Add to history if enabled
+                    if let translation = self.latestTranslation {
+                        environment.historyService.saveToHistory(translation)
+                    }
+
+                    print("✅ Translation completed: \(translatedText.prefix(50))...")
+                }
+            } catch {
+                // Handle translation failures without crashing
+                await MainActor.run {
+                    self.runtimeError = .translationFailed(error.localizedDescription)
+                    print("❌ Translation failed: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    /// Checks and updates permission state
+    func checkPermissions() {
+        permissionState = environment.permissionService.checkPermissionState()
+    }
+
+    /// Opens system accessibility settings
+    func openAccessibilitySettings() {
+        environment.permissionService.openAccessibilitySettings()
+    }
+
+    /// Starts observing permission state changes (useful after opening system settings)
+    func observePermissionChanges() {
+        // Poll permission state every 2 seconds when waiting for authorization
+        guard !permissionState.isAuthorized else { return }
+
+        Timer.publish(every: 2.0, on: .main, in: .common)
+            .autoconnect()
+            .sink { [weak self] _ in
+                guard let self = self else { return }
+                let newState = self.environment.permissionService.checkPermissionState()
+                if newState != self.permissionState {
+                    self.permissionState = newState
+                }
+            }
+            .store(in: &cancellables)
+    }
+
+    /// Starts input monitoring
+    func startMonitoring() {
+        // Check permission state before starting
+        guard permissionState.isAuthorized else {
+            runtimeError = .permissionMissing
+            return
+        }
+
+        // Check if we have an active model configuration
+        guard activeModelConfig != nil else {
+            runtimeError = .modelUnavailable
+            return
+        }
+
+        // Clear any previous errors
+        runtimeError = nil
+
+        environment.inputMonitoringService.startMonitoring()
+        isMonitoring = environment.inputMonitoringService.isMonitoring
+    }
+
+    /// Stops input monitoring
+    func stopMonitoring() {
+        environment.inputMonitoringService.stopMonitoring()
+        isMonitoring = environment.inputMonitoringService.isMonitoring
+    }
+
+    // MARK: - Model Configuration Management
+
+    /// Saves or updates a model configuration with its API key
+    func saveModelConfiguration(_ config: ModelConfig, apiKey: String) throws {
+        try environment.modelConfigService.saveConfiguration(config, apiKey: apiKey)
+    }
+
+    /// Deletes a model configuration
+    func deleteModelConfiguration(id: UUID) throws {
+        try environment.modelConfigService.deleteConfiguration(id: id)
+    }
+
+    /// Sets a model configuration as active (hot-switch)
+    func setActiveModelConfiguration(id: UUID) throws {
+        try environment.modelConfigService.setActiveConfiguration(id: id)
+    }
+
+    /// Retrieves the API key for a model configuration
+    func getAPIKey(for id: UUID) -> String? {
+        return environment.modelConfigService.getAPIKey(for: id)
+    }
+
+    // MARK: - History Management
+
+    /// Enables or disables history recording
+    func setHistoryEnabled(_ enabled: Bool) {
+        environment.historyService.setEnabled(enabled)
+        isHistoryEnabled = enabled
+    }
+
+    /// Clears all history items
+    func clearHistory() {
+        environment.historyService.clearHistory()
+    }
+
+    // MARK: - Error Management
+
+    /// Dismisses the current runtime error
+    func dismissError() {
+        runtimeError = nil
+    }
+}

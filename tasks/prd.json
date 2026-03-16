@@ -1,0 +1,208 @@
+{
+  "project": "Spark",
+  "branchName": "ralph/spark-realtime-english-assistant-v1",
+  "description": "Build the Spark macOS MVP for real-time Chinese input monitoring, AI English translation, and non-intrusive floating result display.",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Create Spark app architecture baseline",
+      "description": "As a developer, I want a clear app state and service architecture so later MVP features can be implemented in isolated iterations.",
+      "acceptanceCriteria": [
+        "Add shared domain models for translation result, model config, permission state, and history item",
+        "Introduce protocol-based service interfaces and a lightweight AppEnvironment container for runtime wiring",
+        "App launches with the new architecture scaffold and no functional regression",
+        "xcodebuild -scheme spark -configuration Debug build succeeds"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Completed: Architecture baseline with domain models, service protocols, AppEnvironment DI container, and AppState. Build verified successful."
+    },
+    {
+      "id": "US-002",
+      "title": "Implement accessibility permission service",
+      "description": "As a first-time user, I want Spark to detect accessibility permission status so I know whether global monitoring can run.",
+      "acceptanceCriteria": [
+        "Add a permission service that reads current macOS accessibility authorization state",
+        "Provide an action to open macOS Accessibility settings from the app",
+        "Expose permission updates to app state so monitoring only starts when authorized",
+        "xcodebuild -scheme spark -configuration Debug build succeeds"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Completed: AccessibilityPermissionService using AXIsProcessTrusted API, integrated into AppEnvironment, AppState tracks permission state and can observe changes. Build verified."
+    },
+    {
+      "id": "US-003",
+      "title": "Build first-launch permission onboarding UI",
+      "description": "As a first-time user, I want guided permission onboarding so I can complete setup quickly and start using translation.",
+      "acceptanceCriteria": [
+        "Show a SwiftUI permission onboarding view on first launch when accessibility permission is missing",
+        "Display clear unauthorized guidance with actions for opening settings and rechecking status",
+        "After permission is granted, app transitions to monitoring-ready state within 3 seconds",
+        "Add SwiftUI previews for unauthorized and authorized onboarding states",
+        "xcodebuild -scheme spark -configuration Debug build succeeds"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Completed: PermissionOnboardingView with state-based UI, ContentView updated to show onboarding when unauthorized and transition to main app when authorized. SwiftUI previews added for all states. Build verified successful."
+    },
+    {
+      "id": "US-004",
+      "title": "Implement global input monitoring with auto-reconnect",
+      "description": "As a user, I want Spark to capture focused input text changes across apps so translation can run continuously during normal work.",
+      "acceptanceCriteria": [
+        "Add a global input monitoring service that emits focused text changes from supported macOS apps",
+        "When active application changes, monitoring reconnects automatically without manual restart",
+        "Monitoring service publishes input events into a pipeline consumable by translation logic",
+        "xcodebuild -scheme spark -configuration Debug build succeeds"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": "Completed: GlobalInputMonitoringService implemented with AX API for focused element monitoring, auto-reconnect on app switch via NSWorkspace notifications, and Combine publisher for input events. Build verified successful."
+    },
+    {
+      "id": "US-005",
+      "title": "Add input content filtering rules",
+      "description": "As a privacy-conscious user, I want Spark to ignore invalid and sensitive input so only safe content reaches translation.",
+      "acceptanceCriteria": [
+        "Filter out empty or whitespace-only input events before debounce",
+        "Detect and ignore secure or password field input events",
+        "Ignore text input originating from Spark's own UI controls",
+        "xcodebuild -scheme spark -configuration Debug build succeeds"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": "Completed: Implemented shouldProcessInput() with three filtering rules - whitespace filtering, secure field detection via AX attributes, and self-app detection via bundle ID. Build verified successful."
+    },
+    {
+      "id": "US-006",
+      "title": "Add configurable debounce trigger",
+      "description": "As a user, I want translation requests triggered only after typing pauses so Spark avoids noisy and expensive calls.",
+      "acceptanceCriteria": [
+        "Implement debounce with default 1000ms idle timeout before triggering translation",
+        "Expose configurable debounce range limited to 800-1500ms",
+        "Only the latest input event after idle timeout triggers a translation request",
+        "xcodebuild -scheme spark -configuration Debug build succeeds"
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": "Completed: Implemented debounce mechanism in GlobalInputMonitoringService with configurable timeout (default 1.0s, clamped to 0.8-1.5s range). Added setDebounceTimeout() to protocol. AppState tracks debounceTimeout property and updates service when changed. Build verified successful."
+    },
+    {
+      "id": "US-007",
+      "title": "Implement translation API client and connection test",
+      "description": "As a user, I want Spark to call my selected AI model and validate connectivity so translation reliability is visible before use.",
+      "acceptanceCriteria": [
+        "Implement translation client using model name, API key, and optional base URL",
+        "Normalize model response into a single English translation payload for UI consumption",
+        "Provide connection test API that returns explicit success or failure message",
+        "xcodebuild -scheme spark -configuration Debug build succeeds"
+      ],
+      "priority": 7,
+      "passes": true,
+      "notes": "Completed: AITranslationService with OpenAI-compatible API, automatic base URL normalization, connection test using simple prompt, structured error handling. Build verified successful."
+    },
+    {
+      "id": "US-008",
+      "title": "Persist model configs securely and support hot switch",
+      "description": "As a user, I want model configuration saved safely and applied immediately so changing providers does not require app restart.",
+      "acceptanceCriteria": [
+        "Store API keys in macOS Keychain and never persist secrets in UserDefaults or plain files",
+        "Persist non-secret model metadata locally and restore active model on app launch",
+        "Switching active model updates all subsequent translation requests immediately",
+        "xcodebuild -scheme spark -configuration Debug build succeeds"
+      ],
+      "priority": 8,
+      "passes": true,
+      "notes": "Completed: PersistentModelConfigService with Keychain API key storage, UserDefaults for non-secret metadata, active model restoration on launch, and hot-switching support. Build verified successful."
+    },
+    {
+      "id": "US-009",
+      "title": "Build model settings UI for manage and switch",
+      "description": "As a user, I want to add, edit, test, and switch model configurations in settings so I can control cost, speed, and quality.",
+      "acceptanceCriteria": [
+        "Settings UI lists the current active model and available model configurations",
+        "User can add and edit model name, API key, and optional base URL",
+        "API key is masked in UI and supports secure update flow",
+        "Connection test action shows clear success or failure feedback",
+        "Switching active model in settings updates runtime translation client selection",
+        "Add SwiftUI previews for empty-state and configured-state settings screens",
+        "xcodebuild -scheme spark -configuration Debug build succeeds"
+      ],
+      "priority": 9,
+      "passes": true,
+      "notes": "Completed: ModelSettingsView with add/edit/test/delete/switch functionality, masked API key input, connection test with feedback, SwiftUI previews for empty and configured states. Build verified successful."
+    },
+    {
+      "id": "US-010",
+      "title": "Implement floating translation window",
+      "description": "As a user, I want a non-intrusive floating window that shows the latest English translation without interrupting typing.",
+      "acceptanceCriteria": [
+        "Add a floating window or panel that remains visible above normal content while user works",
+        "Floating translation UI updates with the latest successful translation result",
+        "Window behavior does not steal focus from the currently active input application",
+        "xcodebuild -scheme spark -configuration Debug build succeeds"
+      ],
+      "priority": 10,
+      "passes": true,
+      "notes": "Completed: FloatingTranslationWindow with NSWindow.level = .floating, non-activating behavior via canBecomeKey/canBecomeMain overrides, FloatingWindowManager for lifecycle management, translation pipeline wired to update latestTranslation, monitoring controls enabled. Build verified successful."
+    },
+    {
+      "id": "US-011",
+      "title": "Add one-click copy with success feedback",
+      "description": "As a user, I want to copy the latest translation quickly so I can reuse it in chats, search, or documents.",
+      "acceptanceCriteria": [
+        "Add copy action on the floating result view for the current translation text",
+        "Copy action writes to system clipboard and shows success feedback",
+        "Copy interaction does not break input focus in the source application",
+        "xcodebuild -scheme spark -configuration Debug build succeeds"
+      ],
+      "priority": 11,
+      "passes": true,
+      "notes": "Completed: Added copy button to FloatingTranslationView header with NSPasteboard integration, animated success feedback with checkmark and 'Copied' text (2-second auto-dismiss), window remains non-activating (no focus stealing). Build verified successful."
+    },
+    {
+      "id": "US-012",
+      "title": "Implement optional local history with default OFF",
+      "description": "As a privacy-sensitive user, I want local history disabled by default and controllable via settings so I can decide whether to retain translations.",
+      "acceptanceCriteria": [
+        "Add a settings toggle named Save local history with default value OFF",
+        "When history toggle is OFF, new translation results are not persisted",
+        "When history toggle is ON, history is stored locally on device only and can be manually cleared",
+        "xcodebuild -scheme spark -configuration Debug build succeeds"
+      ],
+      "priority": 12,
+      "passes": true,
+      "notes": "Completed: PersistentHistoryService with UserDefaults storage, default OFF behavior, history toggle in ModelSettingsView, clear history functionality, AppState integration. Build verified successful."
+    },
+    {
+      "id": "US-013",
+      "title": "Add resilience and runtime error handling",
+      "description": "As a user, I want Spark to recover from monitor and model failures so translation stays reliable in daily use.",
+      "acceptanceCriteria": [
+        "If monitoring service exits unexpectedly, app attempts automatic recovery within 5 seconds",
+        "Permission-missing and model-unavailable states show actionable user-facing error messages",
+        "Translation request failures are handled without crashing the app pipeline",
+        "xcodebuild -scheme spark -configuration Debug build succeeds"
+      ],
+      "priority": 13,
+      "passes": true,
+      "notes": "Completed: Auto-recovery with health checks in GlobalInputMonitoringService, RuntimeError enum with user-facing messages, error state management in AppState, ErrorBanner UI component in ContentView. Build verified successful."
+    },
+    {
+      "id": "US-014",
+      "title": "Add latency instrumentation and regression tests",
+      "description": "As a maintainer, I want automated checks for performance and core workflows so Spark MVP quality remains stable across iterations.",
+      "acceptanceCriteria": [
+        "Instrument and record latency from input idle trigger to floating translation display",
+        "Add tests for permission gating, filtering, debounce, model switching, and history toggle behavior",
+        "Add a mocked end-to-end test for input event to translation display pipeline",
+        "xcodebuild test -scheme spark succeeds",
+        "xcodebuild -scheme spark -configuration Debug build succeeds"
+      ],
+      "priority": 14,
+      "passes": true,
+      "notes": "Completed: Added latency instrumentation (lastTranslationLatency property in AppState), comprehensive test suite with 14 tests covering permission gating, debounce clamping, model switching, history toggle, translation failures, and end-to-end pipeline. All tests pass. Build verified successful."
+    }
+  ]
+}
