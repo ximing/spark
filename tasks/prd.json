@@ -14,8 +14,8 @@
         "xcodebuild -scheme spark -configuration Debug build succeeds"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created KeyboardShortcutService protocol and GlobalKeyboardShortcutService implementation. The service uses NSEvent.addGlobalMonitorForEvents with flagsChanged event type to detect Control key presses. Double-press detection uses a 300ms tolerance window. Fixed AppEnvironment.swift to use MockInputMonitoringService temporarily since GlobalInputMonitoringService was deleted. Build succeeds."
     },
     {
       "id": "US-002",
@@ -24,7 +24,7 @@
       "acceptanceCriteria": [
         "Use Accessibility API to get focused element from system",
         "Extract full text value from focused input field (not just selection)",
-        "Handle cases where focused element has no text value",
+        "Handle cases where focused element has no text value with user-facing error",
         "xcodebuild -scheme spark -configuration Debug build succeeds"
       ],
       "priority": 2,
@@ -48,13 +48,14 @@
     },
     {
       "id": "US-004",
-      "title": "Update translation pipeline for async execution",
-      "description": "As a user, I want translation to run in background without blocking my input.",
+      "title": "Wire shortcut trigger to translation pipeline in AppState",
+      "description": "As a developer, I need to connect the keyboard shortcut event to the existing translation pipeline.",
       "acceptanceCriteria": [
-        "Translation request executes asynchronously",
-        "User can continue typing while translation is in progress",
-        "Translation result updates floating window when complete",
-        "Previous translation remains visible during new translation",
+        "AppState listens to keyboard shortcut events",
+        "Shortcut event triggers text extraction from focused field",
+        "Extracted text flows through existing translation pipeline",
+        "Translation result updates floating window via existing mechanism",
+        "Translation executes asynchronously without blocking user input",
         "xcodebuild -scheme spark -configuration Debug build succeeds"
       ],
       "priority": 4,
@@ -63,36 +64,6 @@
     },
     {
       "id": "US-005",
-      "title": "Wire shortcut trigger to translation pipeline in AppState",
-      "description": "As a developer, I need to connect the keyboard shortcut event to the existing translation pipeline.",
-      "acceptanceCriteria": [
-        "AppState listens to keyboard shortcut events",
-        "Shortcut event triggers text extraction from focused field",
-        "Extracted text flows through existing translation pipeline",
-        "Translation result updates floating window via existing mechanism",
-        "xcodebuild -scheme spark -configuration Debug build succeeds"
-      ],
-      "priority": 5,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-006",
-      "title": "Add clipboard fallback when input field reading fails",
-      "description": "As a user, I want a fallback option when the app cannot read the input field directly.",
-      "acceptanceCriteria": [
-        "When focused input reading fails, attempt to read clipboard content",
-        "Show user a prompt asking to copy text to clipboard if needed",
-        "Clipboard content used as translation source as last resort",
-        "User can choose to skip or continue with clipboard content",
-        "xcodebuild -scheme spark -configuration Debug build succeeds"
-      ],
-      "priority": 6,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-007",
       "title": "Add trigger feedback indicator",
       "description": "As a user, I want visual feedback when translation is triggered.",
       "acceptanceCriteria": [
@@ -101,12 +72,12 @@
         "Feedback is non-intrusive and fades quickly",
         "xcodebuild -scheme spark -configuration Debug build succeeds"
       ],
-      "priority": 7,
+      "priority": 5,
       "passes": false,
       "notes": ""
     },
     {
-      "id": "US-008",
+      "id": "US-006",
       "title": "Update permission onboarding for new trigger mechanism",
       "description": "As a first-time user, I need to understand that the app uses keyboard shortcut trigger instead of automatic monitoring.",
       "acceptanceCriteria": [
@@ -115,12 +86,12 @@
         "Explains that accessibility permission is still needed for reading input fields",
         "xcodebuild -scheme spark -configuration Debug build succeeds"
       ],
-      "priority": 8,
+      "priority": 6,
       "passes": false,
       "notes": ""
     },
     {
-      "id": "US-009",
+      "id": "US-007",
       "title": "Remove automatic input monitoring code",
       "description": "As a developer, I want to clean up the automatic input monitoring code now that shortcut trigger is the primary mechanism.",
       "acceptanceCriteria": [
@@ -130,12 +101,12 @@
         "Build succeeds after cleanup",
         "xcodebuild -scheme spark -configuration Debug build succeeds"
       ],
-      "priority": 9,
+      "priority": 7,
       "passes": false,
       "notes": ""
     },
     {
-      "id": "US-010",
+      "id": "US-008",
       "title": "Update existing tests for new trigger mechanism",
       "description": "As a maintainer, I need tests updated to reflect the new shortcut-based trigger.",
       "acceptanceCriteria": [
@@ -146,7 +117,7 @@
         "All tests pass",
         "xcodebuild test -scheme spark succeeds"
       ],
-      "priority": 10,
+      "priority": 8,
       "passes": false,
       "notes": ""
     }

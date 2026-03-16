@@ -34,8 +34,9 @@ class AppEnvironment {
         // Real permission service implementation
         let permissionService = AccessibilityPermissionService()
 
-        // Real input monitoring service implementation
-        let inputMonitoringService = GlobalInputMonitoringService()
+        // TODO: Replace with real implementation once keyboard shortcut trigger is wired up
+        // Using mock for now since GlobalInputMonitoringService was removed
+        let inputMonitoringService = MockInputMonitoringService()
 
         // Real translation service implementation
         let translationService = AITranslationService()
@@ -68,7 +69,7 @@ private class MockPermissionService: PermissionService {
     func openAccessibilitySettings() {}
 }
 
-private class MockInputMonitoringService: InputMonitoringService {
+class MockInputMonitoringService: InputMonitoringService {
     var inputEvents: AnyPublisher<String, Never> {
         Empty().eraseToAnyPublisher()
     }
