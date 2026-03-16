@@ -57,9 +57,6 @@ class AppState: ObservableObject {
     @Published var isTranslating: Bool = false
     @Published var showShortcutFeedback: Bool = false
 
-    // Clipboard fallback state
-    @Published var pendingClipboardText: String?
-
     // Latency tracking
     @Published var lastTranslationLatency: TimeInterval?
     private var inputEventTimestamp: Date?
@@ -96,7 +93,9 @@ class AppState: ObservableObject {
         environment.keyboardShortcutService.shortcutTriggered
             .receive(on: DispatchQueue.main)
             .sink { [weak self] in
-                self?.handleKeyboardShortcutTriggered()
+                Task { [weak self] in
+                    await self?.handleKeyboardShortcutTriggered()
+                }
             }
             .store(in: &cancellables)
 
@@ -127,34 +126,31 @@ class AppState: ObservableObject {
                     self.runtimeError = nil
                 }
 
-                // Auto-start monitoring if permission is granted, we just got an active model,
-                // and monitoring is not already running (Refs #3)
                 if hadNoActiveConfig,
                    newActiveConfig != nil,
-                   self.permissionState.isAuthorized,
-                   !self.isMonitoring {
-                    // Small delay to ensure model config is fully loaded
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        self.startMonitoring()
-                    }
+                   self.permissionState.isAuthorized {
+                    // Auto-start keyboard shortcut listener when model is configured
+                    self.startShortcutListener()
                 }
             }
             .store(in: &cancellables)
     }
 
-    /// Handles incoming input events from the monitoring service
+    /// Starts the keyboard shortcut listener (always on when permission and model are ready)
+    private func startShortcutListener() {
+        // Start listening for keyboard shortcuts
+        environment.keyboardShortcutService.startListening()
+        print("⌨️ Keyboard shortcut listener started")
+    }
+
+    /// Handles incoming input events from the keyboard shortcut trigger
     private func handleInputEvent(_ text: String) {
-        // Record timestamp when input event arrives (after debounce)
+        // Record timestamp when input event arrives
         inputEventTimestamp = Date()
 
         print("📝 Input event received: \(text.prefix(50))...")
 
-        // Trigger translation if monitoring is active and we have an active model config
-        guard isMonitoring else {
-            print("⚠️ Translation skipped: monitoring not active")
-            return
-        }
-
+        // Trigger translation if we have an active model config
         guard let activeConfig = activeModelConfig else {
             print("⚠️ Translation skipped: no active model config")
             runtimeError = .modelUnavailable
@@ -236,7 +232,7 @@ class AppState: ObservableObject {
     }
 
     /// Handles keyboard shortcut trigger events
-    private func handleKeyboardShortcutTriggered() {
+    private func handleKeyboardShortcutTriggered() async {
         print("⌨️ Keyboard shortcut triggered")
 
         // Show shortcut feedback indicator
@@ -254,15 +250,14 @@ class AppState: ObservableObject {
             return
         }
 
-        // Read text from the currently focused input field
-        let readResult = environment.inputFieldReaderService.readFocusedFieldText()
+        // Read text from the currently focused input field (async)
+        let readResult = await environment.inputFieldReaderService.readFocusedFieldText()
 
         switch readResult {
         case .success(let text):
             // Check if the text is not empty
             guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                 print("⚠️ Shortcut translation skipped: focused field is empty")
-                tryClipboardFallback()
                 return
             }
 
@@ -270,57 +265,16 @@ class AppState: ObservableObject {
             // Pass the extracted text to the existing translation pipeline
             handleInputEvent(text)
 
-        case .noFocusedElement:
-            print("⚠️ Shortcut translation skipped: no focused element")
-            tryClipboardFallback()
-
-        case .noTextValue:
-            print("⚠️ Shortcut translation skipped: focused element has no text value")
-            tryClipboardFallback()
+        case .noFocusedElement, .noTextValue:
+            print("⚠️ Shortcut translation skipped: no text in focused field")
 
         case .passwordField:
             print("🔒 Shortcut translation skipped: password field detected (security)")
-            // Don't show error to user for privacy/security reasons
 
         case .error(let message):
             print("❌ Shortcut translation failed: \(message)")
-            // Show error to user for actual failures
             runtimeError = .translationFailed("Could not read focused field: \(message)")
         }
-    }
-
-    /// Attempts to use clipboard content as a fallback when focused field reading fails
-    private func tryClipboardFallback() {
-        // Try to read from clipboard
-        guard let clipboardText = NSPasteboard.general.string(forType: .string) else {
-            print("⚠️ Clipboard fallback skipped: no text in clipboard")
-            return
-        }
-
-        // Check if clipboard text is not empty
-        let trimmedText = clipboardText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedText.isEmpty else {
-            print("⚠️ Clipboard fallback skipped: clipboard text is empty")
-            return
-        }
-
-        print("📋 Clipboard text available: \(trimmedText.prefix(50))...")
-        // Store the clipboard text and trigger confirmation dialog
-        pendingClipboardText = trimmedText
-    }
-
-    /// Confirms and uses the clipboard text for translation
-    func useClipboardText() {
-        guard let text = pendingClipboardText else { return }
-        print("✅ User confirmed clipboard usage")
-        pendingClipboardText = nil
-        handleInputEvent(text)
-    }
-
-    /// Cancels the clipboard fallback
-    func cancelClipboardFallback() {
-        print("❌ User cancelled clipboard usage")
-        pendingClipboardText = nil
     }
 
     /// Checks and updates permission state

@@ -27,6 +27,12 @@ final class ClipboardBasedInputReaderService: InputFieldReaderService {
         // Small delay to ensure clipboard is ready
         try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
 
+        // First, press Escape to clear any existing selection
+        simulateKeyPress(keyCode: CGKeyCode(kVK_Escape), flags: [])
+        
+        // Small delay
+        try? await Task.sleep(nanoseconds: 30_000_000) // 30ms
+
         // Simulate Cmd+A - Select all
         simulateKeyPress(keyCode: CGKeyCode(kVK_ANSI_A), flags: .maskCommand)
 
@@ -52,6 +58,9 @@ final class ClipboardBasedInputReaderService: InputFieldReaderService {
         guard let text = copiedContent, !text.isEmpty else {
             return .noTextValue
         }
+
+        // Press Escape to cancel the selection after copying
+        simulateKeyPress(keyCode: CGKeyCode(kVK_Escape), flags: [])
 
         return .success(text)
     }

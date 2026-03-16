@@ -23,7 +23,8 @@ struct ModelSettingsView: View {
     }()
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
             // Header
             HStack {
                 Text("Model Settings")
@@ -141,63 +142,21 @@ struct ModelSettingsView: View {
                         .font(.headline)
                         .foregroundColor(.secondary)
 
-                    VStack(alignment: .leading, spacing: 16) {
-                        VStack(alignment: .leading, spacing: 8) {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Translation trigger")
-                                    .font(.subheadline)
-                                    .fontWeight(.medium)
-
-                                Text("Choose the keyboard shortcut to trigger translation of focused input field")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-
-                            ForEach(KeyboardShortcut.allCases, id: \.self) { shortcut in
-                                Button(action: {
-                                    selectedShortcut = shortcut
-                                    UserDefaults.standard.set(shortcut.rawValue, forKey: "keyboardShortcut")
-                                    // Restart the keyboard shortcut service to apply changes
-                                    restartKeyboardShortcutService()
-                                }) {
-                                    HStack {
-                                        VStack(alignment: .leading, spacing: 4) {
-                                            Text(shortcut.displayName)
-                                                .font(.subheadline)
-                                                .fontWeight(.medium)
-                                                .foregroundColor(.primary)
-
-                                            Text(shortcut.description)
-                                                .font(.caption)
-                                                .foregroundColor(.secondary)
-                                        }
-
-                                        Spacer()
-
-                                        if selectedShortcut == shortcut {
-                                            Image(systemName: "checkmark.circle.fill")
-                                                .foregroundColor(.blue)
-                                        } else {
-                                            Image(systemName: "circle")
-                                                .foregroundColor(.secondary)
-                                        }
-                                    }
-                                    .padding(12)
-                                    .background(
-                                        selectedShortcut == shortcut
-                                            ? Color.blue.opacity(0.1)
-                                            : Color.gray.opacity(0.05)
-                                    )
-                                    .cornerRadius(8)
-                                }
-                                .buttonStyle(.plain)
-                            }
+                    KeyboardShortcutRecorder(
+                        selectedShortcut: $selectedShortcut,
+                        onShortcutChanged: {
+                            restartKeyboardShortcutService()
                         }
-                    }
-                    .padding()
-                    .background(Color.gray.opacity(0.05))
-                    .cornerRadius(12)
+                    )
                 }
+            }
+
+            // Settings Shortcut Section
+            if !appState.modelConfigurations.isEmpty {
+                Divider()
+                    .padding(.vertical, 8)
+
+                SettingsShortcutRecorder()
             }
 
             // History Settings Section
@@ -270,10 +229,11 @@ struct ModelSettingsView: View {
                 }
             }
 
-            Spacer()
+            }
+            .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding()
-        .frame(minWidth: 600, minHeight: 400)
+        .frame(minWidth: 720, minHeight: 520)
         .sheet(isPresented: $showingAddEdit) {
             ModelEditView(config: editingConfig)
         }
@@ -693,6 +653,287 @@ private struct ModelEditView: View {
         } catch {
             saveError = "Failed to save: \(error.localizedDescription)"
         }
+    }
+}
+
+// MARK: - Settings Shortcut Recorder
+
+private struct SettingsShortcutRecorder: View {
+    @State private var isRecording: Bool = false
+    @State private var recordedShortcut: CustomKeyboardShortcut?
+    @State private var errorMessage: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            headerView
+
+            recordButton
+
+            if let error = errorMessage {
+                errorView(message: error)
+            }
+
+            if let shortcut = recordedShortcut {
+                currentShortcutView(shortcut)
+            }
+
+            hintView
+        }
+        .padding(12)
+        .background(Color.gray.opacity(0.05))
+        .cornerRadius(12)
+        .onAppear { loadCurrentShortcut() }
+        .onDisappear { stopRecording() }
+    }
+
+    // MARK: - Subviews
+
+    private var headerView: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Open Settings Shortcut")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                Text("Press a key combination to open settings globally")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            Spacer()
+            if recordedShortcut != nil {
+                clearButton
+            }
+        }
+    }
+
+    private var clearButton: some View {
+        Button(action: clearShortcut) {
+            HStack(spacing: 4) {
+                Image(systemName: "xmark.circle.fill")
+                Text("Clear")
+            }
+            .font(.caption)
+            .foregroundColor(.secondary)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var recordButton: some View {
+        Button(action: {
+            if !isRecording {
+                startRecording()
+            }
+        }) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Key Combination")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundColor(.primary)
+
+                    if isRecording {
+                        Text("Press your desired key combination...")
+                            .font(.caption)
+                            .foregroundColor(.red)
+                    } else if let shortcut = recordedShortcut {
+                        Text(shortcut.description)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    } else {
+                        Text("Click to record (e.g., ⌘⇧S)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                Spacer()
+                Image(systemName: isRecording ? "record.circle" : "circle")
+                    .foregroundColor(isRecording ? .red : .secondary)
+            }
+            .padding(10)
+            .background(isRecording ? Color.red.opacity(0.1) : Color.gray.opacity(0.05))
+            .cornerRadius(8)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(isRecording ? Color.red : Color.clear, lineWidth: 2)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func errorView(message: String) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundColor(.orange)
+            Text(message)
+                .font(.caption)
+                .foregroundColor(.orange)
+        }
+    }
+
+    private func currentShortcutView(_ shortcut: CustomKeyboardShortcut) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundColor(.green)
+            Text("Current: \(shortcut.displayName)")
+                .font(.caption)
+                .foregroundColor(.green)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(Color.green.opacity(0.1))
+        .cornerRadius(6)
+    }
+
+    private var hintView: some View {
+        Text("💡 This shortcut will open the Settings window from anywhere")
+            .font(.caption)
+            .foregroundColor(.secondary)
+    }
+
+    // MARK: - Logic
+
+    private func loadCurrentShortcut() {
+        if let shortcut = KeyboardShortcut.settingsShortcut {
+            recordedShortcut = shortcut
+        }
+    }
+
+    private func startRecording() {
+        errorMessage = nil
+        isRecording = true
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            SettingsShortcutRecorderHelper.shared.start(
+                isRecording: { [self] in self.isRecording },
+                onRecorded: { [self] shortcut in self.handleRecordedShortcut(shortcut) },
+                onCancel: { [self] in self.stopRecording() }
+            )
+        }
+    }
+
+    private func handleRecordedShortcut(_ shortcut: CustomKeyboardShortcut) {
+        let hasModifier = shortcut.modifiers & UInt(NSEvent.ModifierFlags.command.rawValue) != 0 ||
+                          shortcut.modifiers & UInt(NSEvent.ModifierFlags.option.rawValue) != 0 ||
+                          shortcut.modifiers & UInt(NSEvent.ModifierFlags.control.rawValue) != 0
+
+        if !hasModifier {
+            errorMessage = "Please use a shortcut with at least one modifier (⌘, ⌥, or ⌃)"
+            return
+        }
+
+        stopRecording()
+        recordedShortcut = shortcut
+        KeyboardShortcut.settingsShortcut = shortcut
+    }
+
+    private func stopRecording() {
+        SettingsShortcutRecorderHelper.shared.stop()
+        isRecording = false
+    }
+
+    private func clearShortcut() {
+        recordedShortcut = nil
+        KeyboardShortcut.settingsShortcut = nil
+    }
+}
+
+// MARK: - Settings Shortcut Recorder Helper
+
+private class SettingsShortcutRecorderHelper {
+    static let shared = SettingsShortcutRecorderHelper()
+
+    private var onShortcutRecorded: ((CustomKeyboardShortcut) -> Void)?
+    private var onCancel: (() -> Void)?
+
+    private var eventMonitor: Any?
+    private var eventTap: CFMachPort?
+    private var runLoopSource: CFRunLoopSource?
+
+    private var isRecordingCheck: (() -> Bool)?
+
+    func start(isRecording: @escaping () -> Bool,
+               onRecorded: @escaping (CustomKeyboardShortcut) -> Void,
+               onCancel: @escaping () -> Void) {
+        self.isRecordingCheck = isRecording
+        self.onShortcutRecorded = onRecorded
+        self.onCancel = onCancel
+
+        eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self = self, self.isRecordingCheck?() == true else { return event }
+            return self.handleEvent(event)
+        }
+
+        setupCGEventTap()
+    }
+
+    func stop() {
+        if let monitor = eventMonitor {
+            NSEvent.removeMonitor(monitor)
+            eventMonitor = nil
+        }
+
+        if let tap = eventTap {
+            CGEvent.tapEnable(tap: tap, enable: false)
+        }
+        if let source = runLoopSource {
+            CFRunLoopRemoveSource(CFRunLoopGetCurrent(), source, .commonModes)
+        }
+        eventTap = nil
+        runLoopSource = nil
+
+        onShortcutRecorded = nil
+        onCancel = nil
+    }
+
+    private func handleEvent(_ event: NSEvent) -> NSEvent? {
+        if event.keyCode == 53 {
+            DispatchQueue.main.async { self.onCancel?() }
+            return nil
+        }
+
+        if let shortcut = CustomKeyboardShortcut(from: event) {
+            DispatchQueue.main.async { self.onShortcutRecorded?(shortcut) }
+            return nil
+        }
+
+        return event
+    }
+
+    private func setupCGEventTap() {
+        // Use global event tap for system-wide recording
+        let eventMask = (1 << CGEventType.keyDown.rawValue)
+
+        guard let tap = CGEvent.tapCreate(
+            tap: .cgSessionEventTap,
+            place: .headInsertEventTap,
+            options: .defaultTap,
+            eventsOfInterest: CGEventMask(eventMask),
+            callback: { proxy, type, event, refcon in
+                guard let refcon = refcon else { return Unmanaged.passUnretained(event) }
+                let helper = Unmanaged<SettingsShortcutRecorderHelper>.fromOpaque(refcon).takeUnretainedValue()
+
+                if helper.isRecordingCheck?() == true {
+                    let nsEvent = NSEvent(cgEvent: event)
+                    if let nsEvent = nsEvent,
+                       nsEvent.type == .keyDown,
+                       nsEvent.keyCode != 53 {
+                        if let shortcut = CustomKeyboardShortcut(from: nsEvent) {
+                            DispatchQueue.main.async { helper.onShortcutRecorded?(shortcut) }
+                            return nil
+                        }
+                    }
+                }
+                return Unmanaged.passUnretained(event)
+            },
+            userInfo: Unmanaged.passUnretained(self).toOpaque()
+        ) else {
+            print("Failed to create event tap for settings shortcut recorder")
+            return
+        }
+
+        eventTap = tap
+        runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
+        CFRunLoopAddSource(CFRunLoopGetCurrent(), runLoopSource, .commonModes)
+        CGEvent.tapEnable(tap: tap, enable: true)
     }
 }
 

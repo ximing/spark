@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import Combine
 
 /// Lightweight dependency injection container for runtime service wiring
 class AppEnvironment {
@@ -49,8 +50,8 @@ class AppEnvironment {
         // Real keyboard shortcut service implementation
         let keyboardShortcutService = GlobalKeyboardShortcutService()
 
-        // Real input field reader service implementation
-        let inputFieldReaderService = AccessibilityInputFieldReaderService()
+        // Real input field reader service implementation (uses Cmd+A, Cmd+C - no accessibility permission needed)
+        let inputFieldReaderService = ClipboardBasedInputReaderService()
 
         return AppEnvironment(
             permissionService: permissionService,

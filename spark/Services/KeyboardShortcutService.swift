@@ -13,6 +13,9 @@ protocol KeyboardShortcutService {
     /// Publisher that emits when the configured keyboard shortcut is detected
     var shortcutTriggered: AnyPublisher<Void, Never> { get }
 
+    /// Publisher that emits when the settings shortcut is detected
+    var settingsShortcutTriggered: AnyPublisher<Void, Never> { get }
+
     /// Starts listening for keyboard shortcuts
     func startListening()
 

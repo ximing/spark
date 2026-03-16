@@ -4,39 +4,18 @@
 //
 //  Created by ximing on 2026/3/16.
 //
+//  Note: This view is no longer used in the app startup flow.
+//  The app now launches directly into FloatingTranslationView (history list page).
+//  This file is kept for reference and unit test compatibility.
+//
 
 import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject var appState: AppState
-    @State private var hasCheckedPermission = false
     @State private var showingSettings = false
 
     var body: some View {
-        Group {
-            if appState.permissionState.isAuthorized {
-                // Main app view after permission is granted
-                mainAppView
-                    .transition(.opacity)
-            } else {
-                // Show onboarding for first-launch or when permission is missing
-                PermissionOnboardingView()
-                    .transition(.opacity)
-            }
-        }
-        .animation(.easeInOut(duration: 0.3), value: appState.permissionState.isAuthorized)
-        .onChange(of: appState.permissionState) { oldValue, newValue in
-            // Transition to monitoring-ready state within 3 seconds after permission granted
-            if !oldValue.isAuthorized && newValue.isAuthorized {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    // Permission granted, ready to start monitoring
-                    hasCheckedPermission = true
-                }
-            }
-        }
-    }
-
-    private var mainAppView: some View {
         VStack(spacing: 20) {
             // Settings button in top-right corner
             HStack {
@@ -76,37 +55,19 @@ struct ContentView: View {
                 .font(.title)
                 .fontWeight(.bold)
 
-            Text("Accessibility permission granted. Monitoring is ready to start.")
+            Text("Press keyboard shortcut to translate text in any input field.")
                 .font(.body)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
 
-            // Monitoring controls
-            Button(action: {
-                if appState.isMonitoring {
-                    appState.stopMonitoring()
-                } else {
-                    appState.startMonitoring()
-                }
-            }) {
-                HStack(spacing: 8) {
-                    Image(systemName: appState.isMonitoring ? "stop.circle.fill" : "play.circle.fill")
-                    Text(appState.isMonitoring ? "Stop Monitoring" : "Start Monitoring")
-                }
-                .padding(.horizontal, 32)
-                .padding(.vertical, 12)
-                .background(appState.isMonitoring ? Color.red : Color.blue)
-                .foregroundColor(.white)
-                .cornerRadius(8)
-            }
-            .buttonStyle(.plain)
-            .disabled(appState.activeModelConfig == nil) // Require active model config
-
-            if appState.activeModelConfig == nil {
-                Text("Please configure a model in Settings to start monitoring")
-                    .font(.caption)
-                    .foregroundColor(.orange)
+            // Status indicator - showing current status
+            HStack(spacing: 8) {
+                Image(systemName: appState.activeModelConfig != nil ? "keyboard" : "exclamationmark.triangle")
+                    .foregroundColor(appState.activeModelConfig != nil ? .green : .orange)
+                Text(appState.activeModelConfig != nil ? "Ready - Use keyboard shortcut to translate" : "Configure a model in Settings")
+                    .font(.body)
+                    .foregroundColor(appState.activeModelConfig != nil ? .primary : .orange)
             }
 
             Spacer()
@@ -115,35 +76,14 @@ struct ContentView: View {
         .sheet(isPresented: $showingSettings) {
             ModelSettingsView()
         }
-        .alert("Use Clipboard for Translation?", isPresented: .constant(appState.pendingClipboardText != nil)) {
-            Button("Use Clipboard") {
-                appState.useClipboardText()
-            }
-            Button("Cancel", role: .cancel) {
-                appState.cancelClipboardFallback()
-            }
-        } message: {
-            Text("Cannot read focused input field. Would you like to translate the text from your clipboard instead?")
-        }
     }
 }
 
-#Preview("Onboarding - Unauthorized") {
+#Preview("Main App") {
     ContentView()
         .environmentObject({
             let env = AppEnvironment.production()
             let state = AppState(environment: env)
-            state.permissionState = .denied
-            return state
-        }())
-}
-
-#Preview("Main App - Authorized") {
-    ContentView()
-        .environmentObject({
-            let env = AppEnvironment.production()
-            let state = AppState(environment: env)
-            state.permissionState = .authorized
             return state
         }())
 }

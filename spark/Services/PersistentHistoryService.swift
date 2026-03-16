@@ -19,12 +19,19 @@ class PersistentHistoryService: HistoryService {
     }
 
     var isEnabled: Bool {
-        UserDefaults.standard.bool(forKey: isEnabledKey)
+        // Default to true if not set - use optional to distinguish between unset and false
+        if UserDefaults.standard.object(forKey: isEnabledKey) == nil {
+            // First launch - enable history by default
+            UserDefaults.standard.set(true, forKey: isEnabledKey)
+            return true
+        }
+        return UserDefaults.standard.bool(forKey: isEnabledKey)
     }
 
     init() {
         // Load existing history from UserDefaults
         loadHistory()
+        print("📚 History service initialized, isEnabled: \(isEnabled)")
     }
 
     func setEnabled(_ enabled: Bool) {
