@@ -124,6 +124,55 @@ struct ModelSettingsView: View {
                 .padding()
             }
 
+            // Debounce Settings Section
+            if !appState.modelConfigurations.isEmpty {
+                Divider()
+                    .padding(.vertical, 8)
+
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Input Monitoring")
+                        .font(.headline)
+                        .foregroundColor(.secondary)
+
+                    VStack(alignment: .leading, spacing: 16) {
+                        // Debounce Timeout Control
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Debounce timeout")
+                                        .font(.subheadline)
+                                        .fontWeight(.medium)
+
+                                    Text("Time to wait after typing stops before triggering translation")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+
+                                Spacer()
+
+                                Text("\(Int(appState.debounceTimeout * 1000))ms")
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(.blue)
+                                    .frame(width: 60, alignment: .trailing)
+                            }
+
+                            Slider(
+                                value: Binding(
+                                    get: { appState.debounceTimeout },
+                                    set: { appState.debounceTimeout = $0 }
+                                ),
+                                in: 0.8...1.5,
+                                step: 0.1
+                            )
+                        }
+                    }
+                    .padding()
+                    .background(Color.gray.opacity(0.05))
+                    .cornerRadius(12)
+                }
+            }
+
             // History Settings Section
             if !appState.modelConfigurations.isEmpty {
                 Divider()

@@ -57,6 +57,8 @@ class AppState: ObservableObject {
         didSet {
             // Update the monitoring service when debounce timeout changes
             environment.inputMonitoringService.setDebounceTimeout(debounceTimeout)
+            // Persist the value
+            UserDefaults.standard.set(debounceTimeout, forKey: "debounceTimeout")
         }
     }
 
@@ -69,6 +71,13 @@ class AppState: ObservableObject {
 
     init(environment: AppEnvironment) {
         self.environment = environment
+
+        // Load persisted debounce timeout (clamped to 800-1500ms range)
+        let persistedTimeout = UserDefaults.standard.double(forKey: "debounceTimeout")
+        if persistedTimeout > 0 {
+            self.debounceTimeout = min(max(persistedTimeout, 0.8), 1.5)
+        }
+
         setupBindings()
         // Check initial permission state
         checkPermissions()
