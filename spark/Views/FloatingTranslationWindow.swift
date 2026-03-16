@@ -66,6 +66,19 @@ struct FloatingTranslationView: View {
                     .font(.headline)
                 Spacer()
 
+                // Shortcut trigger feedback indicator
+                if appState.showShortcutFeedback {
+                    HStack(spacing: 4) {
+                        Image(systemName: "keyboard.fill")
+                            .foregroundColor(.blue)
+                        Text("Shortcut")
+                            .font(.caption)
+                            .foregroundColor(.blue)
+                    }
+                    .transition(.scale.combined(with: .opacity))
+                    .animation(.spring(response: 0.3, dampingFraction: 0.6), value: appState.showShortcutFeedback)
+                }
+
                 // Copy success indicator
                 if showCopySuccess {
                     HStack(spacing: 4) {

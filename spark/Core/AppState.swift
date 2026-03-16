@@ -63,6 +63,7 @@ class AppState: ObservableObject {
         }
     }
     @Published var isTranslating: Bool = false
+    @Published var showShortcutFeedback: Bool = false
 
     // Clipboard fallback state
     @Published var pendingClipboardText: String?
@@ -259,6 +260,14 @@ class AppState: ObservableObject {
     /// Handles keyboard shortcut trigger events
     private func handleKeyboardShortcutTriggered() {
         print("⌨️ Keyboard shortcut triggered")
+
+        // Show shortcut feedback indicator
+        showShortcutFeedback = true
+
+        // Auto-reset feedback indicator after 500ms
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            self?.showShortcutFeedback = false
+        }
 
         // Check if we have an active model configuration
         guard activeModelConfig != nil else {

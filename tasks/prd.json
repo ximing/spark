@@ -73,8 +73,8 @@
         "xcodebuild -scheme spark -configuration Debug build succeeds"
       ],
       "priority": 5,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added showShortcutFeedback @Published property to AppState. In handleKeyboardShortcutTriggered(), set showShortcutFeedback to true when shortcut is detected, with auto-reset to false after 500ms using DispatchQueue.main.asyncAfter. Updated FloatingTranslationView to display a brief indicator (keyboard icon with 'Shortcut' text) in the header when showShortcutFeedback is true. The indicator uses spring animation with scale and opacity transitions for smooth feedback. Build succeeds."
     },
     {
       "id": "US-006",
