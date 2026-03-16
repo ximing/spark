@@ -415,6 +415,41 @@ struct SparkTests {
         #expect(appState.activeModelConfig?.id == model2.id)
     }
 
+    @Test("Model config: first model should auto-activate when none is active")
+    @MainActor
+    func testFirstModelAutoActivation() async throws {
+        // Given: app starts with no active model
+        let mockModelConfig = MockModelConfigService()
+        let environment = AppEnvironment(
+            permissionService: MockPermissionService(),
+            inputMonitoringService: MockInputMonitoringService(),
+            translationService: MockTranslationService(),
+            modelConfigService: mockModelConfig,
+            historyService: MockHistoryService()
+        )
+
+        let appState = AppState(environment: environment)
+        appState.runtimeError = .modelUnavailable
+
+        // When: saving the first model as inactive (legacy data pattern)
+        let firstModel = ModelConfig(
+            id: UUID(),
+            name: "First Model",
+            modelName: "gpt-4",
+            baseURL: "https://api.openai.com",
+            isActive: false
+        )
+        try mockModelConfig.saveConfiguration(firstModel, apiKey: "first-key")
+
+        // Wait for auto-activation path to complete
+        try await Task.sleep(nanoseconds: 200_000_000) // 0.2s
+
+        // Then: app state should recover to a usable active model immediately
+        #expect(appState.activeModelConfig?.id == firstModel.id)
+        #expect(appState.modelConfigurations.first?.isActive == true)
+        #expect(appState.runtimeError == nil)
+    }
+
     // MARK: - History Toggle Tests
 
     @Test("History toggle: history should not save when disabled")

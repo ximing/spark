@@ -646,7 +646,7 @@ private struct ModelEditView: View {
             name: trimmedName,
             modelName: trimmedModelName,
             baseURL: trimmedBaseURL.isEmpty ? nil : trimmedBaseURL,
-            isActive: config?.isActive ?? false
+            isActive: config?.isActive ?? (appState.activeModelConfig == nil)
         )
 
         do {

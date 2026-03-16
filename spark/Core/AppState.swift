@@ -110,9 +110,27 @@ class AppState: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] configs in
                 guard let self = self else { return }
-                let newActiveConfig = configs.first(where: { $0.isActive })
+
+                // Keep legacy data compatible: when configs exist but none are active,
+                // auto-activate the first one to unblock monitoring immediately.
+                if !configs.isEmpty,
+                   configs.first(where: { $0.isActive }) == nil,
+                   let fallbackConfig = configs.first {
+                    do {
+                        try self.environment.modelConfigService.setActiveConfiguration(id: fallbackConfig.id)
+                        return
+                    } catch {
+                        print("⚠️ Failed to auto-activate fallback model: \(error)")
+                    }
+                }
+
+                let newActiveConfig = configs.first(where: { $0.isActive }) ?? configs.first
                 let hadNoActiveConfig = self.activeModelConfig == nil
                 self.activeModelConfig = newActiveConfig
+
+                if newActiveConfig != nil, self.runtimeError == .modelUnavailable {
+                    self.runtimeError = nil
+                }
 
                 // Auto-start monitoring if permission is granted, we just got an active model,
                 // and monitoring is not already running (Refs #3)
